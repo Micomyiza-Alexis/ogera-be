@@ -57,7 +57,7 @@ export default function (sequelize: Sequelize): typeof AcademicVerificationModel
         allowNull: false,
       },
       status: {
-        type: DataTypes.ENUM('pending', 'accepted', 'rejected'),
+        type: DataTypes.ENUM('pending', 'accepted', 'rejected', 'resubmission_required'),
         allowNull: false,
         defaultValue: 'pending',
       },

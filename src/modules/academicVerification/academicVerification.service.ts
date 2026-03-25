@@ -115,9 +115,9 @@ export const reuploadAcademicDocService = async (
   }
 
   // Only allow re-upload if status is rejected
-  if (existing.status !== 'rejected') {
+  if (existing.status !== 'rejected' && existing.status !== 'resubmission_required') {
     throw new CustomError(
-      `Cannot re-upload. Current status is: ${existing.status}. Only rejected verifications can be re-uploaded.`,
+      `Cannot re-upload. Current status is: ${existing.status}. Only rejected or resubmission-required verifications can be re-uploaded.`,
       StatusCodes.BAD_REQUEST
     );
   }
@@ -199,17 +199,17 @@ export const reviewAcademicDocService = async (
   const { status, rejection_reason } = data;
 
   // Validate status
-  if (status !== 'accepted' && status !== 'rejected') {
+  if (status !== 'accepted' && status !== 'rejected' && status !== 'resubmission_required') {
     throw new CustomError(
-      "Status must be either 'accepted' or 'rejected'",
+      "Status must be either 'accepted', 'rejected', or 'resubmission_required'",
       StatusCodes.BAD_REQUEST
     );
   }
 
-  // If rejected, rejection_reason is required
-  if (status === 'rejected' && !rejection_reason) {
+  // If rejected or resubmission_required, reason is required
+  if ((status === 'rejected' || status === 'resubmission_required') && !rejection_reason) {
     throw new CustomError(
-      'Rejection reason is required when status is rejected',
+      'Reason is required when status is rejected or resubmission_required',
       StatusCodes.BAD_REQUEST
     );
   }
@@ -224,7 +224,7 @@ export const reviewAcademicDocService = async (
   // Update academic verification
   await repo.update(id, {
     status,
-    rejection_reason: status === 'rejected' ? rejection_reason : null,
+    rejection_reason: status === 'rejected' || status === 'resubmission_required' ? rejection_reason : null,
     reviewed_by: admin_id,
     reviewed_at: new Date(),
   });
@@ -238,10 +238,16 @@ export const reviewAcademicDocService = async (
   try {
     await DB.ActivityLogs.create({
       user_id: admin_id || null,
-      action: status === 'accepted' ? 'APPROVE' : 'REJECT',
+      action: status === 'accepted' ? 'APPROVE' : status === 'rejected' ? 'REJECT' : 'RESUBMISSION_REQUIRED',
       entity_type: 'Verification',
       entity_id: id,
-      description: `Verification ${status === 'accepted' ? 'approved' : 'rejected'} for user ${updated.user_id}`,
+      description: `Verification ${
+        status === 'accepted'
+          ? 'approved'
+          : status === 'rejected'
+          ? 'rejected'
+          : 'marked as resubmission required'
+      } for user ${updated.user_id}`,
     } as any);
   } catch (e) {
     // ignore logging errors
