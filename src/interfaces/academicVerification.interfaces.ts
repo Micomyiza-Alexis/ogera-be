@@ -1,4 +1,4 @@
-export type AcademicVerificationStatus = 'pending' | 'accepted' | 'rejected';
+export type AcademicVerificationStatus = 'pending' | 'accepted' | 'rejected' | 'resubmission_required';
 export type StorageType = 'local' | 's3';
 
 export interface AcademicVerification {
@@ -27,7 +27,7 @@ export interface AcademicVerificationCreationAttributes {
 }
 
 export interface ReviewAcademicVerificationData {
-  status: 'accepted' | 'rejected';
+  status: 'accepted' | 'rejected' | 'resubmission_required';
   rejection_reason?: string | null;
 }
 

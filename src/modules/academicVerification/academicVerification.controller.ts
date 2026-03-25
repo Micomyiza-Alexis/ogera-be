@@ -231,12 +231,15 @@ export const reviewAcademicDoc = async (req: any, res: Response): Promise<void> 
       return;
     }
 
-    if (!status || (status !== 'accepted' && status !== 'rejected')) {
+    if (
+      !status ||
+      (status !== 'accepted' && status !== 'rejected' && status !== 'resubmission_required')
+    ) {
       response.errorResponse(
         res,
         StatusCodes.BAD_REQUEST,
         false,
-        "Status must be either 'accepted' or 'rejected'"
+        "Status must be either 'accepted', 'rejected', or 'resubmission_required'"
       );
       return;
     }
@@ -375,7 +378,12 @@ export const getAllAcademicVerifications = async (req: any, res: Response): Prom
     const roleName = req.user?.role;
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
-    const status = req.query.status as 'pending' | 'accepted' | 'rejected' | undefined;
+    const status = req.query.status as
+      | 'pending'
+      | 'accepted'
+      | 'rejected'
+      | 'resubmission_required'
+      | undefined;
 
     // Check if user has admin roleType (not just roleName)
     const user = await DB.Users.findOne({
