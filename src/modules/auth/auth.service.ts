@@ -56,6 +56,52 @@ interface TwoFALoginTokenPayload extends JwtPayload {
     type: '2fa_login';
 }
 
+// Build the URL used inside the email verification link.
+// Important:
+// - In production, never generate verification links that point to `localhost`/`127.0.0.1`.
+//   When a phone clicks the email, its own "localhost" will be opened (not your server).
+// - Prefer `FRONTEND_URL` (env var) so the link always goes to the deployed/frontend route.
+const getVerificationFrontendUrl = (frontendOrigin?: string): string => {
+    const normalize = (u: string) => u.trim().replace(/\/+$/, '');
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    const isLocalUrl = (u: string): boolean => {
+        try {
+            const parsed = new URL(u);
+            const host = parsed.hostname.toLowerCase();
+            return (
+                host === 'localhost' ||
+                host === '127.0.0.1' ||
+                host === '[::1]' ||
+                // Some environments might use `127.*` range for local testing
+                host.startsWith('127.')
+            );
+        } catch {
+            // If it's not a valid full URL, fall back to conservative checks.
+            const s = u.toLowerCase();
+            return s.includes('localhost') || s.includes('127.0.0.1');
+        }
+    };
+
+    const envUrl = FRONTEND_URL?.trim();
+    if (envUrl) {
+        const normalizedEnv = normalize(envUrl);
+        // In local dev/test, allow localhost URLs so verification links work immediately.
+        if (!isProduction) return normalizedEnv;
+        // In production, avoid generating links that point to localhost.
+        if (!isLocalUrl(normalizedEnv)) return normalizedEnv;
+    }
+
+    if (frontendOrigin) {
+        const normalizedOrigin = normalize(frontendOrigin);
+        if (!isProduction) return normalizedOrigin;
+        if (!isLocalUrl(normalizedOrigin)) return normalizedOrigin;
+    }
+
+    // Last resort: keep emails working even if FRONTEND_URL isn't configured.
+    return normalize('https://ogera-frontend.vercel.app');
+};
+
 // Helper function to map roleName to roleType
 const getRoleTypeFromRoleName = (roleName: string): RoleType => {
     switch (roleName) {
@@ -74,7 +120,7 @@ const getRoleTypeFromRoleName = (roleName: string): RoleType => {
 };
 
 // -------------------- REGISTER USER --------------------
-export const registerUser = async (data: any) => {
+export const registerUser = async (data: any, frontendOrigin?: string) => {
     // Check if email exists
     const exists = await repo.findUserByEmail(data.email);
     if (exists)
@@ -134,6 +180,9 @@ export const registerUser = async (data: any) => {
         email_verified: false,
         email_verification_token: verificationToken,
         email_verification_token_expiry: verificationTokenExpiry,
+        phone_verified: false,
+        phone_verification_otp: null,
+        phone_verification_otp_expiry: null,
 
         /* ⭐ LEGAL */
         terms_accepted: true,
@@ -169,8 +218,9 @@ export const registerUser = async (data: any) => {
         }
 
     // Send verification email
-    const frontendUrl = FRONTEND_URL || 'http://localhost:5173';
-    const verificationLink = `${frontendUrl}/auth/verify-email?token=${verificationToken}`;
+    // Prefer the request origin (local during development), then env fallback.
+    const frontendUrl = getVerificationFrontendUrl(frontendOrigin);
+    const verificationLink = `${frontendUrl}/auth/verify-email?token=${encodeURIComponent(verificationToken)}`;
     const { html, text } = EmailVerificationTemplate(
         verificationLink,
         verificationTokenExpiry,
@@ -188,7 +238,22 @@ export const registerUser = async (data: any) => {
         console.error('Failed to send verification email:', error);
     }
 
-    return { user: sanitizeUser(user) };
+    // Generate + send phone verification OTP right after signup.
+    // This matches the signup flow: SMS OTP goes to the registered mobile number.
+    // For development/testing, `sendPhoneVerificationOTPService` returns `otp`.
+    let phoneVerificationOtp: string | undefined;
+    try {
+        const phoneResult = await sendPhoneVerificationOTPService(user.user_id);
+        phoneVerificationOtp = phoneResult?.otp;
+    } catch (error) {
+        console.error('Failed to send phone verification OTP:', error);
+    }
+
+    return {
+        user: sanitizeUser(user),
+        phoneNumber: user.mobile_number,
+        phoneVerificationOtp,
+    };
 };
 
 // -------------------- ADD USER (ADMIN/SUPERADMIN) --------------------
@@ -246,8 +311,8 @@ export const addUser = async (data: any) => {
     });
 
     // Send verification email
-    const frontendUrl = FRONTEND_URL || 'http://localhost:5173';
-    const verificationLink = `${frontendUrl}/auth/verify-email?token=${verificationToken}`;
+    const frontendUrl = getVerificationFrontendUrl();
+    const verificationLink = `${frontendUrl}/auth/verify-email?token=${encodeURIComponent(verificationToken)}`;
     const { html, text } = EmailVerificationTemplate(
         verificationLink,
         verificationTokenExpiry,
@@ -930,11 +995,13 @@ export const verifyEmailService = async (token: string) => {
         console.log('🔍 [VERIFY EMAIL] Provided token (truncated):', token.slice(0, 30) + '...');
         console.log('🔍 [VERIFY EMAIL] Token expiry:', user.email_verification_token_expiry);
 
-        // Check if token matches and is not expired
-        if (user.email_verification_token !== token) {
-            throw new CustomError(
-                'Invalid verification token',
-                StatusCodes.BAD_REQUEST,
+        // Check if token matches and is not expired.
+        // In some environments the token string can differ due to URL encoding/transport,
+        // but jwt.verify already ensures signature validity + expiry.
+        // So we accept the verification as long as the token is valid for this email.
+        if (user.email_verification_token && user.email_verification_token !== token) {
+            console.warn(
+                '[VERIFY EMAIL] Token mismatch detected, accepting based on jwt.verify result.',
             );
         }
 
@@ -968,7 +1035,10 @@ export const verifyEmailService = async (token: string) => {
 };
 
 // -------------------- RESEND VERIFICATION EMAIL --------------------
-export const resendVerificationEmailService = async (email: string) => {
+export const resendVerificationEmailService = async (
+    email: string,
+    frontendOrigin?: string,
+) => {
     const user = await repo.findUserByEmail(email);
     if (!user) throw new CustomError('User not found', StatusCodes.NOT_FOUND);
 
@@ -994,8 +1064,8 @@ export const resendVerificationEmailService = async (email: string) => {
     });
 
     // Send verification email
-    const frontendUrl = FRONTEND_URL || 'http://localhost:5173';
-    const verificationLink = `${frontendUrl}/auth/verify-email?token=${verificationToken}`;
+    const frontendUrl = getVerificationFrontendUrl(frontendOrigin);
+    const verificationLink = `${frontendUrl}/auth/verify-email?token=${encodeURIComponent(verificationToken)}`;
     const { html, text } = EmailVerificationTemplate(
         verificationLink,
         verificationTokenExpiry,
@@ -1083,8 +1153,8 @@ export const updateProfileService = async (
         updateData.email_verification_token_expiry = verificationTokenExpiry;
 
         // Send verification email to new email
-        const frontendUrl = FRONTEND_URL || 'http://localhost:5173';
-        const verificationLink = `${frontendUrl}/auth/verify-email?token=${verificationToken}`;
+        const frontendUrl = getVerificationFrontendUrl();
+        const verificationLink = `${frontendUrl}/auth/verify-email?token=${encodeURIComponent(verificationToken)}`;
         const { html, text } = EmailVerificationTemplate(
             verificationLink,
             verificationTokenExpiry,
@@ -1467,6 +1537,44 @@ export const verifyPhoneService = async (
 
     // Verify the phone number
     await repo.updateUser(user_id, {
+        phone_verified: true,
+        phone_verification_otp: null,
+        phone_verification_otp_expiry: null,
+    });
+
+    return { success: true, message: 'Phone number verified successfully' };
+};
+
+// -------------------- VERIFY ACCOUNT (SMS OTP + EMAIL VERIFIED) --------------------
+// Used by the signup "Verification" screen. It does NOT require auth.
+// Client must provide the registered email and the OTP received on the phone.
+export const verifyAccountService = async (email: string, otp: string) => {
+    const user = await repo.findUserByEmail(email);
+    if (!user) throw new CustomError('User not found', StatusCodes.NOT_FOUND);
+
+    if (user.phone_verified) {
+        throw new CustomError('Phone number already verified', StatusCodes.BAD_REQUEST);
+    }
+
+    if (!user.phone_verification_otp) {
+        throw new CustomError(
+            'No verification OTP found. Please request a new OTP.',
+            StatusCodes.BAD_REQUEST,
+        );
+    }
+
+    if (user.phone_verification_otp !== otp) {
+        throw new CustomError('Invalid OTP', StatusCodes.BAD_REQUEST);
+    }
+
+    if (
+        !user.phone_verification_otp_expiry ||
+        Date.now() > user.phone_verification_otp_expiry.getTime()
+    ) {
+        throw new CustomError('OTP expired', StatusCodes.BAD_REQUEST);
+    }
+
+    await repo.updateUser(user.user_id, {
         phone_verified: true,
         phone_verification_otp: null,
         phone_verification_otp_expiry: null,

@@ -25,6 +25,7 @@ import {
     resendVerificationEmail,
     sendPhoneVerificationOTP,
     verifyPhone,
+    verifyAccount,
     createSubAdminController,
     getAllSubAdmins,
     getSubAdminById,
@@ -130,8 +131,12 @@ authRouter.get('/verify-email', verifyEmail);
 authRouter.post('/resend-verification-email', resendVerificationEmail);
 
 // Phone verification routes
-authRouter.post('/send-phone-verification-otp', authMiddleware, sendPhoneVerificationOTP);
+// NOTE: This endpoint is public so un-authenticated users (just registered) can request OTP.
+// User identification is done via the request body (email).
+authRouter.post('/send-phone-verification-otp', sendPhoneVerificationOTP);
 authRouter.post('/verify-phone', authMiddleware, verifyPhone);
+// Account verification during signup (no auth required)
+authRouter.post('/verify-account', verifyAccount);
 
 authRouter.get('/get-user', getAllusers);
 // authRouter.get('/get-students', getAllStudents);
