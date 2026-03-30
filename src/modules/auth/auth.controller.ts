@@ -24,6 +24,7 @@ import {
     resendVerificationEmailService,
     sendPhoneVerificationOTPService,
     verifyPhoneService,
+    verifyAccountService,
     createSubAdmin,
     getAllSubAdminsService,
     getSubAdminByIdService,
@@ -35,6 +36,8 @@ import {
     setup2FAWithTokenService,
     verify2FAWithTokenService,
 } from './auth.service';
+
+import repo from './auth.repo';
 
 const response = new ResponseFormat();
 
@@ -52,13 +55,29 @@ export const register = async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        const result = await registerUser(req.body);
+        // Use the frontend origin (where the signup request came from)
+        // to build correct verification links (avoid hardcoded localhost).
+        const originHeader = req.headers.origin;
+        const refererHeader = req.headers.referer;
+
+        let frontendOrigin: string | undefined;
+        if (typeof originHeader === 'string' && originHeader) {
+            frontendOrigin = originHeader;
+        } else if (typeof refererHeader === 'string' && refererHeader) {
+            try {
+                frontendOrigin = new URL(refererHeader).origin;
+            } catch {
+                frontendOrigin = undefined;
+            }
+        }
+
+        const result = await registerUser(req.body, frontendOrigin);
 
         response.response(
             res,
             true,
             StatusCodes.CREATED,
-            result.user,
+            result,
             'User registered successfully',
         );
     } catch (error: any) {
@@ -738,9 +757,13 @@ export const verifyEmail = async (
     res: Response,
 ): Promise<void> => {
     try {
-        const { token } = req.query;
+        // Express can provide query params as string|string[]
+        const tokenParam = req.query.token;
+        const token = Array.isArray(tokenParam)
+            ? tokenParam[0]
+            : tokenParam;
 
-        if (!token || typeof token !== 'string') {
+        if (!token || typeof token !== 'string' || !token.trim()) {
             response.errorResponse(
                 res,
                 StatusCodes.BAD_REQUEST,
@@ -750,7 +773,7 @@ export const verifyEmail = async (
             return;
         }
 
-        await verifyEmailService(token);
+        await verifyEmailService(token.trim());
 
         response.response(
             res,
@@ -787,7 +810,21 @@ export const resendVerificationEmail = async (
             return;
         }
 
-        const result = await resendVerificationEmailService(email);
+        const originHeader = req.headers.origin;
+        const refererHeader = req.headers.referer;
+
+        let frontendOrigin: string | undefined;
+        if (typeof originHeader === 'string' && originHeader) {
+            frontendOrigin = originHeader;
+        } else if (typeof refererHeader === 'string' && refererHeader) {
+            try {
+                frontendOrigin = new URL(refererHeader).origin;
+            } catch {
+                frontendOrigin = undefined;
+            }
+        }
+
+        const result = await resendVerificationEmailService(email, frontendOrigin);
 
         response.response(
             res,
@@ -1235,18 +1272,39 @@ export const sendPhoneVerificationOTP = async (
     res: Response,
 ): Promise<void> => {
     try {
+        // This endpoint can be called before login (after signup),
+        // so we identify the user via `email` in the request body.
+        // If an auth header is present and middleware populates req.user, we can also use req.user.
         const user_id = req.user?.user_id;
-        if (!user_id) {
-            response.errorResponse(
-                res,
-                StatusCodes.UNAUTHORIZED,
-                false,
-                'User not authenticated',
-            );
-            return;
+        const { email } = req.body as { email?: string };
+
+        let targetUserId = user_id;
+        if (!targetUserId) {
+            if (!email || typeof email !== 'string' || !email.trim()) {
+                response.errorResponse(
+                    res,
+                    StatusCodes.BAD_REQUEST,
+                    false,
+                    'Email is required to send phone verification OTP',
+                );
+                return;
+            }
+
+            const user = await repo.findUserByEmail(email.trim());
+            if (!user) {
+                response.errorResponse(
+                    res,
+                    StatusCodes.NOT_FOUND,
+                    false,
+                    'User not found for provided email',
+                );
+                return;
+            }
+
+            targetUserId = user.user_id;
         }
 
-        const result = await sendPhoneVerificationOTPService(user_id);
+        const result = await sendPhoneVerificationOTPService(targetUserId);
 
         response.response(
             res,
@@ -1302,6 +1360,40 @@ export const verifyPhone = async (
             StatusCodes.OK,
             result,
             'Phone number verified successfully',
+        );
+    } catch (error: any) {
+        response.errorResponse(
+            res,
+            error.status || StatusCodes.INTERNAL_SERVER_ERROR,
+            false,
+            error.message,
+        );
+    }
+};
+
+// -------------------- VERIFY ACCOUNT (SMS OTP + email verification) --------------------
+export const verifyAccount = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { email, otp } = req.body;
+
+        if (!email || typeof email !== 'string') {
+            response.errorResponse(res, StatusCodes.BAD_REQUEST, false, 'Email is required');
+            return;
+        }
+
+        if (!otp || typeof otp !== 'string') {
+            response.errorResponse(res, StatusCodes.BAD_REQUEST, false, 'OTP is required');
+            return;
+        }
+
+        const result = await verifyAccountService(email.trim(), otp.trim());
+
+        response.response(
+            res,
+            true,
+            StatusCodes.OK,
+            result,
+            'Phone number verified successfully'
         );
     } catch (error: any) {
         response.errorResponse(

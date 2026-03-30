@@ -96,7 +96,19 @@ export const MOMO_DISBURSEMENT_CONFIG = {
 
 // SMS Configuration
 export const SMS_CONFIG = {
-    provider: (process.env.SMS_PROVIDER || 'console') as 'twilio' | 'console' | 'none',
+    // If SMS_PROVIDER isn't explicitly set, auto-enable Twilio when credentials exist.
+    // Otherwise fall back to console mode (development/testing).
+    provider: (() => {
+        const providerEnv = process.env.SMS_PROVIDER as 'twilio' | 'console' | 'none' | undefined;
+        if (providerEnv) return providerEnv;
+
+        const hasTwilioCreds =
+            !!process.env.TWILIO_ACCOUNT_SID &&
+            !!process.env.TWILIO_AUTH_TOKEN &&
+            !!process.env.TWILIO_FROM_NUMBER;
+
+        return (hasTwilioCreds ? 'twilio' : 'console') as 'twilio' | 'console' | 'none';
+    })(),
     twilio: {
         accountSid: process.env.TWILIO_ACCOUNT_SID || '',
         authToken: process.env.TWILIO_AUTH_TOKEN || '',
