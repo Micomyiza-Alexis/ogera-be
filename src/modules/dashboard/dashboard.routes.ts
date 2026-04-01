@@ -1,20 +1,19 @@
 import express, { Router } from "express";
-import { getMetrics, getRecentActivities } from "./dashboard.controller";
-import { getStudentDashboard } from "./dashboard.controller";
+import { getEmployerDashboard, getMetrics, getRecentActivities, getStudentDashboard } from "./dashboard.controller";
 import { authMiddleware } from "@/middlewares/auth.middleware";
-import { superadminOnly } from "@/middlewares/role.middleware";
+import { adminOrSuperadminOnly } from "@/middlewares/role.middleware";
 
 const router: Router = express.Router();
 
 /**
  * GET /api/dashboard/metrics
- * Get all dashboard metrics (superadmin only)
- * Requires: Authentication + Superadmin role
+ * Get all dashboard metrics (admin/superadmin)
+ * Requires: Authentication + Admin/Superadmin role
  */
 router.get(
   "/metrics",
   authMiddleware,
-  superadminOnly,
+  adminOrSuperadminOnly,
   getMetrics
 );
 
@@ -24,7 +23,7 @@ router.get(
 router.get(
   "/recent-activities",
   authMiddleware,
-  superadminOnly,
+  adminOrSuperadminOnly,
   getRecentActivities,
 );
 
@@ -37,6 +36,17 @@ router.get(
   "/student",
   authMiddleware,
   getStudentDashboard,
+);
+
+/**
+ * GET /api/dashboard/employer
+ * Get dashboard metrics for authenticated employer
+ * Requires authentication (employer)
+ */
+router.get(
+  "/employer",
+  authMiddleware,
+  getEmployerDashboard,
 );
 
 export default router;

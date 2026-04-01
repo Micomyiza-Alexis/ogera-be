@@ -32,8 +32,31 @@ export interface StudentDashboardResponse {
     note?: string;
   };
   earnings: {
-    value: number; // sum of transactions for this student in current period
-    currency: string | null; // currency from transactions (null if none)
+    value: number; // total amount received via MoMo payouts (jobs.amount_paid_to_student)
+    currency: string | null;
+  };
+}
+
+/**
+ * Employer dashboard response shape
+ */
+export interface EmployerDashboardResponse {
+  jobsPosted: {
+    value: number;
+    change: number | null;
+  };
+  applicationsReceived: {
+    value: number;
+    change: number | null;
+  };
+  activeHires: {
+    value: number;
+    change: number | null;
+  };
+  totalSpent: {
+    value: number;
+    change: number | null;
+    currency: string | null;
   };
 }
 
@@ -68,11 +91,9 @@ export const getStudentDashboard = async (userId: string, periodDays = 30): Prom
       const interviewsChange = currentInterviews - previousInterviews;
       const interviewsGrowth = previousInterviews > 0 ? Math.round(((currentInterviews - previousInterviews) / previousInterviews) * 100) : (previousInterviews === 0 ? (currentInterviews === 0 ? 0 : null) : null);
 
-      // Earnings: sum transactions for student in current period and get currency
-      const earnings = await repo.getStudentEarningsBetween(userId, currentStart, currentEnd);
-      const previousEarnings = await repo.getStudentEarningsBetween(userId, prevStart, prevEnd);
-      const earningsChange = Number(earnings.total ?? 0) - Number(previousEarnings.total ?? 0);
-      const earningsGrowth = (previousEarnings.total ?? 0) > 0 ? Math.round((earningsChange / (previousEarnings.total ?? 1)) * 100) : ((previousEarnings.total ?? 0) === 0 ? ((earnings.total ?? 0) === 0 ? 0 : null) : null);
+      // Earnings card value should be total amount student has received from Ogera via MoMo.
+      const earnings = await repo.getStudentTotalEarnings(userId);
+      // Note: earnings trend can still be computed later using getStudentEarningsBetween.
 
       const result: StudentDashboardResponse = {
         applications: {
@@ -96,6 +117,66 @@ export const getStudentDashboard = async (userId: string, periodDays = 30): Prom
       return result;
     } catch (error) {
       logger.error('[Dashboard Service] Error fetching student dashboard:', error);
+      throw error;
+    }
+  })();
+};
+
+/**
+ * Get employer dashboard metrics for a specific user
+ * periodDays: number of days for the current window (default 30)
+ */
+export const getEmployerDashboard = async (employerId: string, periodDays = 30): Promise<EmployerDashboardResponse> => {
+  return await (async () => {
+    try {
+      const now = new Date();
+      const periodMs = periodDays * 24 * 60 * 60 * 1000;
+      const currentStart = new Date(now.getTime() - periodMs);
+      const currentEnd = now;
+      const prevStart = new Date(currentStart.getTime() - periodMs);
+      const prevEnd = new Date(currentStart.getTime());
+
+      const [
+        currentJobsPosted,
+        previousJobsPosted,
+        currentApplications,
+        previousApplications,
+        currentHires,
+        previousHires,
+        currentSpent,
+        previousSpent,
+      ] = await Promise.all([
+        repo.getEmployerJobsPostedBetween(employerId, currentStart, currentEnd),
+        repo.getEmployerJobsPostedBetween(employerId, prevStart, prevEnd),
+        repo.getEmployerApplicationsReceivedBetween(employerId, currentStart, currentEnd),
+        repo.getEmployerApplicationsReceivedBetween(employerId, prevStart, prevEnd),
+        repo.getEmployerActiveHiresBetween(employerId, currentStart, currentEnd),
+        repo.getEmployerActiveHiresBetween(employerId, prevStart, prevEnd),
+        repo.getEmployerSpentBetween(employerId, currentStart, currentEnd),
+        repo.getEmployerSpentBetween(employerId, prevStart, prevEnd),
+      ]);
+
+      return {
+        jobsPosted: {
+          value: currentJobsPosted,
+          change: currentJobsPosted - previousJobsPosted,
+        },
+        applicationsReceived: {
+          value: currentApplications,
+          change: currentApplications - previousApplications,
+        },
+        activeHires: {
+          value: currentHires,
+          change: currentHires - previousHires,
+        },
+        totalSpent: {
+          value: currentSpent,
+          change: currentSpent - previousSpent,
+          currency: '$',
+        },
+      };
+    } catch (error) {
+      logger.error('[Dashboard Service] Error fetching employer dashboard:', error);
       throw error;
     }
   })();
@@ -137,4 +218,5 @@ export const getDashboardMetrics = async (): Promise<DashboardMetrics> => {
 export default {
   getDashboardMetrics,
   getStudentDashboard,
+  getEmployerDashboard,
 };

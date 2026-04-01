@@ -197,48 +197,231 @@ const repo = {
   },
 
   /**
-   * Sum earnings for a student between two dates (uses transactions table)
-   * Returns { total: number, currency: string | null }
+   * Sum earnings for a student between two dates using MoMo payout amount.
+   * Source of truth: jobs.amount_paid_to_student for paid jobs.
    */
   getStudentEarningsBetween: async (studentId: string, start: Date, end: Date): Promise<{ total: number; currency: string | null }> => {
     try {
-      if ((DB as any).Transactions) {
-        const { Op } = require('sequelize');
-        const sumResult: any = await (DB as any).Transactions.sum('amount', {
-          where: {
-            user_id: studentId,
-            created_at: {
-              [Op.gte]: start,
-              [Op.lt]: end,
+      const { Op } = require('sequelize');
+
+      const paidApplications = await DB.JobApplications.findAll({
+        where: {
+          student_id: studentId,
+          status: 'Accepted',
+        },
+        include: [
+          {
+            model: DB.Jobs,
+            as: 'job',
+            required: true,
+            where: {
+              funding_status: 'Paid',
+              amount_paid_to_student: {
+                [Op.ne]: null,
+              },
+              [Op.or]: [
+                {
+                  paid_at: {
+                    [Op.gte]: start,
+                    [Op.lt]: end,
+                  },
+                },
+                {
+                  paid_at: null,
+                  updated_at: {
+                    [Op.gte]: start,
+                    [Op.lt]: end,
+                  },
+                },
+              ],
             },
+            attributes: ['job_id', 'amount_paid_to_student'],
           },
-        });
+        ],
+        attributes: ['application_id', 'job_id'],
+      }) as Array<any>;
 
-        const total = sumResult !== null && sumResult !== undefined ? Number(sumResult) : 0;
+      const seenJobIds = new Set<string>();
+      const total = paidApplications.reduce((sum, application) => {
+        const jobId = String(application?.job?.job_id ?? application?.job_id ?? '');
+        if (!jobId || seenJobIds.has(jobId)) return sum;
+        seenJobIds.add(jobId);
 
-        // Find latest currency for this user in the period (fallback: any transaction currency)
-        const latestTx: any = await (DB as any).Transactions.findOne({
-          where: {
-            user_id: studentId,
-            created_at: {
-              [Op.gte]: start,
-              [Op.lt]: end,
-            },
-          },
-          order: [['created_at', 'DESC']],
-          attributes: ['currency'],
-          raw: true,
-        });
+        const paid = Number(application?.job?.amount_paid_to_student ?? 0);
+        return sum + (Number.isNaN(paid) ? 0 : paid);
+      }, 0);
 
-        const currency = latestTx ? latestTx.currency : null;
-
-        logger.info(`[Dashboard] Student ${studentId} earnings between ${start.toISOString()} and ${end.toISOString()}: ${total} ${currency}`);
-        return { total, currency };
-      }
-      return { total: 0, currency: null };
+      logger.info(`[Dashboard] Student ${studentId} MoMo earnings between ${start.toISOString()} and ${end.toISOString()}: ${total}`);
+      return { total, currency: null };
     } catch (error) {
       logger.error('[Dashboard] Error summing student earnings:', error);
       return { total: 0, currency: null };
+    }
+  },
+  /**
+   * Sum total lifetime earnings for a student from MoMo payouts.
+   * Source of truth: jobs.amount_paid_to_student for paid jobs.
+   */
+  getStudentTotalEarnings: async (studentId: string): Promise<{ total: number; currency: string | null }> => {
+    try {
+      const { Op } = require('sequelize');
+      const paidApplications = await DB.JobApplications.findAll({
+        where: {
+          student_id: studentId,
+          status: 'Accepted',
+        },
+        include: [
+          {
+            model: DB.Jobs,
+            as: 'job',
+            required: true,
+            where: {
+              funding_status: 'Paid',
+              amount_paid_to_student: {
+                [Op.ne]: null,
+              },
+            },
+            attributes: ['job_id', 'amount_paid_to_student'],
+          },
+        ],
+        attributes: ['application_id', 'job_id'],
+      }) as Array<any>;
+
+      const seenJobIds = new Set<string>();
+      const total = paidApplications.reduce((sum, application) => {
+        const jobId = String(application?.job?.job_id ?? application?.job_id ?? '');
+        if (!jobId || seenJobIds.has(jobId)) return sum;
+        seenJobIds.add(jobId);
+
+        const paid = Number(application?.job?.amount_paid_to_student ?? 0);
+        return sum + (Number.isNaN(paid) ? 0 : paid);
+      }, 0);
+
+      logger.info(`[Dashboard] Student ${studentId} total MoMo earnings: ${total}`);
+      return { total, currency: null };
+    } catch (error) {
+      logger.error('[Dashboard] Error summing student total earnings:', error);
+      return { total: 0, currency: null };
+    }
+  },
+  /**
+   * Count employer jobs posted in a date range using jobs.created_at
+   */
+  getEmployerJobsPostedBetween: async (employerId: string, start: Date, end: Date): Promise<number> => {
+    try {
+      const { Op } = require('sequelize');
+      const count = await DB.Jobs.count({
+        where: {
+          employer_id: employerId,
+          created_at: {
+            [Op.gte]: start,
+            [Op.lt]: end,
+          },
+        },
+      });
+      return Number(count ?? 0);
+    } catch (error) {
+      logger.error('[Dashboard] Error counting employer jobs posted:', error);
+      return 0;
+    }
+  },
+  /**
+   * Count employer applications received in a date range.
+   */
+  getEmployerApplicationsReceivedBetween: async (employerId: string, start: Date, end: Date): Promise<number> => {
+    try {
+      const { Op } = require('sequelize');
+      const count = await DB.JobApplications.count({
+        include: [
+          {
+            model: DB.Jobs,
+            as: 'job',
+            required: true,
+            where: {
+              employer_id: employerId,
+            },
+            attributes: [],
+          },
+        ],
+        where: {
+          applied_at: {
+            [Op.gte]: start,
+            [Op.lt]: end,
+          },
+        },
+        distinct: true,
+        col: 'application_id',
+      });
+      return Number(count ?? 0);
+    } catch (error) {
+      logger.error('[Dashboard] Error counting employer applications:', error);
+      return 0;
+    }
+  },
+  /**
+   * Count accepted applications (active hires) in a date range.
+   */
+  getEmployerActiveHiresBetween: async (employerId: string, start: Date, end: Date): Promise<number> => {
+    try {
+      const { Op } = require('sequelize');
+      const count = await DB.JobApplications.count({
+        include: [
+          {
+            model: DB.Jobs,
+            as: 'job',
+            required: true,
+            where: {
+              employer_id: employerId,
+            },
+            attributes: [],
+          },
+        ],
+        where: {
+          status: 'Accepted',
+          reviewed_at: {
+            [Op.gte]: start,
+            [Op.lt]: end,
+          },
+        },
+        distinct: true,
+        col: 'application_id',
+      });
+      return Number(count ?? 0);
+    } catch (error) {
+      logger.error('[Dashboard] Error counting employer active hires:', error);
+      return 0;
+    }
+  },
+  /**
+   * Sum employer funded + paid budgets in a date range.
+   */
+  getEmployerSpentBetween: async (employerId: string, start: Date, end: Date): Promise<number> => {
+    try {
+      const { Op } = require('sequelize');
+      const rows = await DB.Jobs.findAll({
+        where: {
+          employer_id: employerId,
+          funding_status: {
+            [Op.in]: ['Funded', 'Paid'],
+          },
+          updated_at: {
+            [Op.gte]: start,
+            [Op.lt]: end,
+          },
+        },
+        attributes: ['budget'],
+        raw: true,
+      }) as Array<{ budget: number | string }>;
+
+      const total = rows.reduce((sum, row) => {
+        const amount = Number(row?.budget ?? 0);
+        return sum + (Number.isNaN(amount) ? 0 : amount);
+      }, 0);
+
+      return Math.round(total);
+    } catch (error) {
+      logger.error('[Dashboard] Error summing employer spent amount:', error);
+      return 0;
     }
   },
     /**
