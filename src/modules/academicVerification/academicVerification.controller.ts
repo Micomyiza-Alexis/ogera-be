@@ -407,41 +407,26 @@ export const getAllAcademicVerifications = async (req: any, res: Response): Prom
 
     const roleType = user.role.roleType;
 
-    // If student, return only their own verification (filtered by status if provided)
+    // If student, return only their own verifications (filtered by status if provided)
     if (roleName === 'student' || roleType === 'student') {
       try {
-        const myVerification = await getAcademicVerificationByUserIdService(userId);
-        
-        // Filter by status if provided and matches
-        if (status && myVerification.status !== status) {
-          // If status filter doesn't match, return empty result
-          res.status(StatusCodes.OK).json({
-            status: StatusCodes.OK,
-            message: 'Academic verification retrieved successfully',
-            success: true,
-            pagination: {
-              total: 0,
-              page,
-              limit,
-              totalPages: 0,
-            },
-            data: [],
-          });
-          return;
-        }
+        const myVerifications = await getAcademicVerificationByUserIdService(userId);
+        const verifications = Array.isArray(myVerifications) ? myVerifications : myVerifications ? [myVerifications] : [];
 
-        // Return student's own verification
+        // Filter by status if provided
+        const filtered = status ? verifications.filter((v: any) => v.status === status) : verifications;
+
         res.status(StatusCodes.OK).json({
           status: StatusCodes.OK,
-          message: 'Academic verification retrieved successfully',
+          message: 'Academic verifications retrieved successfully',
           success: true,
           pagination: {
-            total: 1,
+            total: filtered.length,
             page,
             limit,
-            totalPages: 1,
+            totalPages: Math.ceil(filtered.length / limit),
           },
-          data: [myVerification],
+          data: filtered,
         });
         return;
       } catch (error: any) {

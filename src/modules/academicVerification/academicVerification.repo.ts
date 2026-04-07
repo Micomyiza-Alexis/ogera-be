@@ -63,6 +63,27 @@ const repo = {
     });
   },
 
+  findAllByUserId: async (user_id: string): Promise<AcademicVerification[]> => {
+    return await DB.AcademicVerifications.findAll({
+      where: { user_id },
+      order: [['created_at', 'DESC']],
+      include: [
+        {
+          model: DB.Users,
+          as: 'reviewer',
+          attributes: ['user_id', 'full_name', 'email'],
+          required: false,
+        },
+        {
+          model: DB.Users,
+          as: 'assignedAdmin',
+          attributes: ['user_id', 'full_name', 'email'],
+          required: false,
+        },
+      ],
+    });
+  },
+
   // Find academic verification by user_id and ID (for re-upload validation)
   findByUserIdAndId: async (user_id: string, id: string): Promise<AcademicVerification | null> => {
     return await DB.AcademicVerifications.findOne({
