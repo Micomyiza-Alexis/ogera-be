@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import dashboardService, { DashboardMetrics } from "./dashboard.service";
-import { StudentDashboardResponse } from "./dashboard.service";
+import { EmployerDashboardResponse, StudentDashboardResponse } from "./dashboard.service";
 import repo from "./dashboard.repo";
 import { StatusCodes } from "http-status-codes";
 import { CustomError } from "@/utils/custom-error";
@@ -84,6 +84,41 @@ export const getStudentDashboard = async (req: Request, res: Response): Promise<
       success: false,
       status: StatusCodes.INTERNAL_SERVER_ERROR,
       message: 'Failed to retrieve student dashboard metrics',
+    });
+  }
+};
+
+/**
+ * GET /api/dashboard/employer
+ * Returns employer-specific dashboard metrics for the authenticated user
+ */
+export const getEmployerDashboard = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.user_id as string | undefined;
+    if (!userId) {
+      res.status(StatusCodes.UNAUTHORIZED).json({
+        success: false,
+        status: StatusCodes.UNAUTHORIZED,
+        message: 'User not authenticated',
+      });
+      return;
+    }
+
+    const periodDays = Number(req.query.periodDays) || 30;
+    const metrics: EmployerDashboardResponse = await dashboardService.getEmployerDashboard(userId, periodDays);
+
+    res.status(StatusCodes.OK).json({
+      success: true,
+      status: StatusCodes.OK,
+      data: metrics,
+      message: 'Employer dashboard metrics retrieved successfully',
+    });
+  } catch (error) {
+    logger.error('[Dashboard Controller] Error in getEmployerDashboard:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      status: StatusCodes.INTERNAL_SERVER_ERROR,
+      message: 'Failed to retrieve employer dashboard metrics',
     });
   }
 };

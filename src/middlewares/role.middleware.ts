@@ -113,22 +113,25 @@ export const adminOrSuperadminOnly = async (
         }
 
         const roleName = req.user.role;
+        const normalizedRole = roleName?.toLowerCase?.();
 
-        // Check if user is superadmin (case-insensitive) or admin/subadmin
-        if (
-            roleName?.toLowerCase() !== 'superadmin' &&
-            roleName !== 'admin' &&
-            roleName !== 'subadmin'
-        ) {
-            return next(
-                new CustomError(
-                    'Forbidden: Only admin or superadmin can perform this action',
-                    403,
-                ),
-            );
+        // Superadmin always allowed.
+        if (normalizedRole === 'superadmin') {
+            return next();
         }
 
-        next();
+        // Allow any admin-type role from DB (covers admin, subadmin, verifyDocAdmin, etc.)
+        const role = await DB.Roles.findOne({ where: { roleName } });
+        if (role?.roleType === 'admin') {
+            return next();
+        }
+
+        return next(
+            new CustomError(
+                'Forbidden: Only admin or superadmin can perform this action',
+                403,
+            ),
+        );
     } catch (error) {
         next(error);
     }
