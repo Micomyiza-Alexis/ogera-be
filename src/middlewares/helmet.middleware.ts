@@ -13,6 +13,9 @@ export const helmetMiddleware = (app: Application) => {
       // prevent MIME sniffing
       noSniff: true,
 
+      // allow cross-origin resource loading (images, uploads)
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+
       // enforce HTTPS (only works on production with HTTPS)
       hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
 
