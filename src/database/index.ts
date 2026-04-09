@@ -41,7 +41,6 @@ import conversationModel from './models/conversation.model';
 import messageModel from './models/message.model';
 
 import { setupAssociations } from '@/association/index';
-
 import {
     DB_DIALECT,
     DB_HOST,
@@ -160,6 +159,7 @@ const Disputes = disputeModel(sequelize);
 const DisputeEvidence = disputeEvidenceModel(sequelize);
 const DisputeMessages = disputeMessageModel(sequelize);
 const DisputeTimeline = disputeTimelineModel(sequelize);
+const Sessions = sessionModel(sequelize);
 
 const CognitiveTests = cognitiveTestModel(sequelize);
 const CognitiveQuestions = cognitiveQuestionModel(sequelize);
@@ -873,7 +873,6 @@ const ensureUserTableColumns = async () => {
         }
     }
 })();
-
 export const DB = {
     Users,
     Roles,
@@ -899,19 +898,22 @@ export const DB = {
     Disputes,
     DisputeEvidence,
     DisputeMessages,
-DisputeTimeline,
-CognitiveTests,
-CognitiveQuestions,
-ProblemMetrics,
-ProblemMetricQuestions,
-UserTests,
-UserFeedbacks,
-TrustscoreHistory,
-AcademicRecords,
-Sessions,
-Tasks,
-Conversations,
-Messages,
-sequelize,
-Sequelize,
+
+    // merged correctly
+    DisputeTimeline,
+    CognitiveTests,
+    CognitiveQuestions,
+    ProblemMetrics,
+    ProblemMetricQuestions,
+    UserTests,
+    UserFeedbacks,
+    TrustscoreHistory,
+    AcademicRecords,
+    Sessions,
+    Tasks,
+    Conversations,
+    Messages,
+
+    sequelize,
+    Sequelize,
 };
