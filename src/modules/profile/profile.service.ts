@@ -267,7 +267,6 @@ export const getFullProfileService = async (user_id: string) => {
     const fullProfile = await repo.getFullProfile(user_id);
     return fullProfile;
 };
-
 // ====================== PROFILE IMAGE UPLOAD ======================
 export const uploadProfileImageService = async (user_id: string, file: Express.Multer.File) => {
     const { path: filePath, storageType } = await saveFile(file, 'profile-images');
@@ -375,8 +374,13 @@ export const updateProfileImageUrlService = async (user_id: string, profile_imag
 };
 
 // ====================== OTHER USER FULL PROFILE ======================
+
 export const getOtherUserFullProfileService = async (target_user_id: string) => {
     const fullProfile = await repo.getFullProfile(target_user_id);
+
+    if (!fullProfile) {
+        throw new CustomError('User profile not found', StatusCodes.NOT_FOUND);
+    }
+
     return fullProfile;
 };
-

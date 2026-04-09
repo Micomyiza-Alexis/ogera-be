@@ -32,7 +32,6 @@ import { SessionModel } from '@/database/models/session.model';
 import { TaskModel } from '@/database/models/task.model';
 import { ConversationModel } from '@/database/models/conversation.model';
 import { MessageModel } from '@/database/models/message.model';
-
 export const setupAssociations = () => {
     // ====================== USER ↔ ROLE ======================
     UserModel.belongsTo(RoleModel, {
@@ -666,7 +665,6 @@ export const setupAssociations = () => {
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE',
     });
-
     // ====================== JOB TASKS ======================
     JobModel.hasMany(TaskModel, {
         foreignKey: 'job_id',

@@ -33,15 +33,16 @@ import {
     getExtendedProfile,
     updateExtendedProfile,
     // Full Profile
-    getFullProfile,
-    // Profile Image & Completion
-    uploadProfileImage,
-    getProfileCompletion,
-    updateProfileImageUrl,
-    // Other User Profile
-    getOtherUserFullProfile,
-} from './profile.controller';
+getFullProfile,
 
+// Profile Image & Completion
+uploadProfileImage,
+getProfileCompletion,
+updateProfileImageUrl,
+
+// Other User Profile
+getOtherUserFullProfile,
+} from './profile.controller';
 const router = Router();
 
 const upload = multer({
@@ -66,7 +67,6 @@ router.get('/completion', getProfileCompletion);
 // ====================== PROFILE IMAGE ======================
 router.post('/upload-image', upload.single('profile_image'), uploadProfileImage);
 router.put('/image', updateProfileImageUrl);
-
 // ====================== EXTENDED PROFILE ======================
 router.get('/extended', getExtendedProfile);
 router.put('/extended', updateExtendedProfile);

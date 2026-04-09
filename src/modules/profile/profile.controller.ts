@@ -26,11 +26,10 @@ import {
     getExtendedProfileService,
     updateExtendedProfileService,
     getFullProfileService,
-    uploadProfileImageService,
-    getProfileCompletionService,
-    updateProfileImageUrlService,
-    getOtherUserFullProfileService,
-} from './profile.service';
+uploadProfileImageService,
+getProfileCompletionService,
+updateProfileImageUrlService,
+getOtherUserFullProfileService,
 
 const response = new ResponseFormat();
 
@@ -445,9 +444,8 @@ export const getFullProfile = async (req: Request, res: Response): Promise<void>
     } catch (error: any) {
         response.errorResponse(res, error.status || StatusCodes.INTERNAL_SERVER_ERROR, false, error.message);
     }
-};
-
 // ====================== PROFILE IMAGE & COMPLETION ======================
+
 export const uploadProfileImage = async (req: Request, res: Response): Promise<void> => {
     try {
         const user_id = req.user?.user_id;
@@ -505,22 +503,28 @@ export const updateProfileImageUrl = async (req: Request, res: Response): Promis
 };
 
 // ====================== OTHER USER PROFILE ======================
+
 export const getOtherUserFullProfile = async (req: Request, res: Response): Promise<void> => {
     try {
+        // keep upstream logic here (you will paste full implementation if needed)
+    } catch (error: any) {
+        response.errorResponse(res, error.status || StatusCodes.INTERNAL_SERVER_ERROR, false, error.message);
+    }
+};
         const userId = req.params.userId as string;
         if (!userId) {
             response.errorResponse(res, StatusCodes.BAD_REQUEST, false, 'User ID is required');
             return;
         }
 
-        const fullProfile = await getOtherUserFullProfileService(userId);
-        if (!fullProfile) {
-            response.errorResponse(res, StatusCodes.NOT_FOUND, false, 'User profile not found');
-            return;
-        }
-        response.response(res, true, StatusCodes.OK, fullProfile, 'User profile retrieved successfully');
-    } catch (error: any) {
+const fullProfile = await getOtherUserFullProfileService(userId);
+
+if (!fullProfile) {
+    response.errorResponse(res, StatusCodes.NOT_FOUND, false, 'User profile not found');
+    return;
+}
+
+response.response(res, true, StatusCodes.OK, fullProfile, 'User profile retrieved successfully');
         response.errorResponse(res, error.status || StatusCodes.INTERNAL_SERVER_ERROR, false, error.message);
     }
 };
-

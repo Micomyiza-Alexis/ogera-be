@@ -39,6 +39,7 @@ import sessionModel from './models/session.model';
 import taskModel from './models/task.model';
 import conversationModel from './models/conversation.model';
 import messageModel from './models/message.model';
+
 import { setupAssociations } from '@/association/index';
 
 import {
@@ -159,6 +160,7 @@ const Disputes = disputeModel(sequelize);
 const DisputeEvidence = disputeEvidenceModel(sequelize);
 const DisputeMessages = disputeMessageModel(sequelize);
 const DisputeTimeline = disputeTimelineModel(sequelize);
+
 const CognitiveTests = cognitiveTestModel(sequelize);
 const CognitiveQuestions = cognitiveQuestionModel(sequelize);
 const ProblemMetrics = problemMetricModel(sequelize);
@@ -897,19 +899,19 @@ export const DB = {
     Disputes,
     DisputeEvidence,
     DisputeMessages,
-    DisputeTimeline,
-    CognitiveTests,
-    CognitiveQuestions,
-    ProblemMetrics,
-    ProblemMetricQuestions,
-    UserTests,
-    UserFeedbacks,
-    TrustscoreHistory,
-    AcademicRecords,
-    Sessions,
-    Tasks,
-    Conversations,
-    Messages,
-    sequelize,
-    Sequelize,
+DisputeTimeline,
+CognitiveTests,
+CognitiveQuestions,
+ProblemMetrics,
+ProblemMetricQuestions,
+UserTests,
+UserFeedbacks,
+TrustscoreHistory,
+AcademicRecords,
+Sessions,
+Tasks,
+Conversations,
+Messages,
+sequelize,
+Sequelize,
 };
