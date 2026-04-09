@@ -15,23 +15,7 @@ export const uploadAcademicDocService = async (
     throw new CustomError('Document file is required', StatusCodes.BAD_REQUEST);
   }
 
-  // Check if user already has an academic verification
-  const existing = await repo.findByUserId(user_id);
-  
-  if (existing) {
-    // If existing is rejected, allow re-upload
-    if (existing.status === 'rejected') {
-      throw new CustomError(
-        'You have a rejected verification. Please use the re-upload endpoint.',
-        StatusCodes.BAD_REQUEST
-      );
-    }
-    // If pending or accepted, don't allow new upload
-    throw new CustomError(
-      `You already have an academic verification with status: ${existing.status}`,
-      StatusCodes.CONFLICT
-    );
-  }
+  // Allow multiple document uploads per student
 
   // Save file to storage (local or S3 based on .env)
   const { path: document_path, storageType } = await saveFile(file, 'academic-proofs');
@@ -269,13 +253,8 @@ export const getAcademicVerificationByIdService = async (id: string) => {
 
 // -------------------- GET ACADEMIC VERIFICATION BY USER ID --------------------
 export const getAcademicVerificationByUserIdService = async (user_id: string) => {
-  const academicVerification = await repo.findByUserId(user_id);
-  
-  if (!academicVerification) {
-    throw new CustomError('Academic verification not found for this user', StatusCodes.NOT_FOUND);
-  }
-
-  return academicVerification;
+  const verifications = await repo.findAllByUserId(user_id);
+  return verifications;
 };
 
 // -------------------- GET ALL ACADEMIC VERIFICATIONS (WITH FILTER) --------------------
