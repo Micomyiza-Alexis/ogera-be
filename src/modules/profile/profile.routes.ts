@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authMiddleware } from '@/middlewares/auth.middleware';
+import { superadminOnly } from '@/middlewares/role.middleware';
 import {
     // Skills
     addSkill,
@@ -37,6 +38,8 @@ import {
     uploadProfileImage,
     getProfileCompletion,
     updateProfileImageUrl,
+    // Other User Profile
+    getOtherUserFullProfile,
 } from './profile.controller';
 
 const router = Router();
@@ -55,6 +58,7 @@ router.use(authMiddleware);
 
 // ====================== FULL PROFILE ======================
 router.get('/full', getFullProfile);
+router.get('/full/:userId', superadminOnly, getOtherUserFullProfile);
 
 // ====================== PROFILE COMPLETION ======================
 router.get('/completion', getProfileCompletion);

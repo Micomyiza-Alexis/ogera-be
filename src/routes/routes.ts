@@ -1,6 +1,7 @@
 import authRouter from '@/modules/auth/auth.routes';
 import roleRouter from '@/modules/role/role.routes';
 import permissionRouter from '@/modules/permission/permission.routes';
+import sessionRouter from '@/modules/session/session.routes';
 import jobRouter from '@/modules/job/job.routes';
 import jobCategoryRouter from '@/modules/jobCategory/jobCategory.routes';
 import jobApplicationRouter from '@/modules/jobApplication/jobApplication.routes';
@@ -21,6 +22,7 @@ const router = express.Router();
 router.use('/auth', authRouter);
 router.use('/roles', roleRouter);
 router.use('/permissions', permissionRouter);
+router.use('/sessions', sessionRouter);
 router.use('/jobs', jobRouter);
 router.use('/job-categories', jobCategoryRouter);
 router.use('/', jobApplicationRouter);

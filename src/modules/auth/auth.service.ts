@@ -26,6 +26,9 @@ import {
 } from '@/middlewares/jwt.service';
 import { RoleType } from '@/interfaces/role.interfaces';
 import { decryptSecret, encryptSecret } from '@/utils/2fa.encryption';
+import { parseDeviceType } from '@/modules/session/session.service';
+import sessionRepo from '@/modules/session/session.repo';
+import { Request } from 'express';
 
 interface ResetTokenPayload extends JwtPayload {
     email: string;
@@ -334,7 +337,7 @@ export const addUser = async (data: any) => {
 };
 
 // -------------------- LOGIN USER --------------------
-export const loginUser = async (body: any) => {
+export const loginUser = async (body: any, req?: Request) => {
     // Verify CAPTCHA token before processing login
     if (body.captchaToken) {
         await verifyCaptcha(body.captchaToken);
@@ -385,6 +388,41 @@ export const loginUser = async (body: any) => {
 
     const accessToken = generateAccessToken(payload);
     const refreshToken = generateRefreshToken(payload); // stateless
+
+    // Create session record if request object is available
+    if (req) {
+        try {
+            console.log('🔵 [Auth Service] Attempting to create session for user:', user.user_id);
+            const userAgent = req.headers['user-agent'] || 'Unknown';
+            const xForwardedFor = req.headers['x-forwarded-for'];
+            const ipAddress = 
+                (typeof xForwardedFor === 'string' ? xForwardedFor.split(',')[0].trim() : xForwardedFor?.[0]) ||
+                req.connection?.remoteAddress ||
+                req.socket?.remoteAddress ||
+                'Unknown';
+            const deviceType = parseDeviceType(userAgent);
+
+            console.log('🔵 [Auth Service] Device type:', deviceType, 'IP:', ipAddress);
+
+            // Set session expiry to 7 days (same as refresh token maxAge)
+            const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+            await sessionRepo.createSession({
+                user_id: user.user_id,
+                token: accessToken,
+                device_type: deviceType,
+                user_agent: userAgent,
+                ip_address: ipAddress,
+                expires_at: expiresAt,
+            });
+            console.log('✅ [Auth Service] Session created successfully');
+        } catch (error) {
+            console.error('❌ [Auth Service] Failed to create session record:', error);
+            // Don't throw - session creation failure shouldn't prevent login
+        }
+    } else {
+        console.warn('⚠️ [Auth Service] No request object available for session creation');
+    }
 
     return {
         user: sanitizeUser(user),
@@ -688,6 +726,7 @@ export const verifyLostAuthenticatorOTPAndDisable2FAService = async (
 export const verifyLogin2FAService = async (
     twoFactorToken: string,
     token: string,
+    req?: Request,
 ) => {
     let decoded: TwoFALoginTokenPayload;
     try {
@@ -738,6 +777,41 @@ export const verifyLogin2FAService = async (
     const accessToken = generateAccessToken(payload);
     const refreshToken = generateRefreshToken(payload);
 
+    // Create session record if request object is available
+    if (req) {
+        try {
+            console.log('🔵 [Auth Service 2FA] Attempting to create session for user:', user.user_id);
+            const userAgent = req.headers['user-agent'] || 'Unknown';
+            const xForwardedFor = req.headers['x-forwarded-for'];
+            const ipAddress = 
+                (typeof xForwardedFor === 'string' ? xForwardedFor.split(',')[0].trim() : xForwardedFor?.[0]) ||
+                req.connection?.remoteAddress ||
+                req.socket?.remoteAddress ||
+                'Unknown';
+            const deviceType = parseDeviceType(userAgent);
+
+            console.log('🔵 [Auth Service 2FA] Device type:', deviceType, 'IP:', ipAddress);
+
+            // Set session expiry to 7 days (same as refresh token maxAge)
+            const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+            await sessionRepo.createSession({
+                user_id: user.user_id,
+                token: accessToken,
+                device_type: deviceType,
+                user_agent: userAgent,
+                ip_address: ipAddress,
+                expires_at: expiresAt,
+            });
+            console.log('✅ [Auth Service 2FA] Session created successfully');
+        } catch (error) {
+            console.error('❌ [Auth Service 2FA] Failed to create session record:', error);
+            // Don't throw - session creation failure shouldn't prevent login
+        }
+    } else {
+        console.warn('⚠️ [Auth Service 2FA] No request object available for session creation');
+    }
+
     return {
         user: sanitizeUser(user),
         accessToken,
@@ -765,7 +839,27 @@ export const refreshTokenService = async (refreshToken: string) => {
 };
 
 // -------------------- LOGOUT --------------------
-export const logoutUser = async () => {
+export const logoutUser = async (req?: Request) => {
+    // Revoke session if request object is available
+    if (req && req.user?.user_id) {
+        try {
+            // Extract token from Authorization header
+            const authHeader = req.headers.authorization;
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                const token = authHeader.split(' ')[1];
+                
+                // Find session by token
+                const session = await sessionRepo.getSessionByToken(token);
+                if (session) {
+                    // Revoke the session
+                    await sessionRepo.revokeSession(session.id);
+                }
+            }
+        } catch (error) {
+            console.error('⚠️ Failed to revoke session record:', error);
+            // Don't throw - session revocation failure shouldn't prevent logout
+        }
+    }
     // Stateless logout → clear cookie only
     return { message: 'Logged out successfully' };
 };

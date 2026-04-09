@@ -118,7 +118,7 @@ export const addUserController = async (
 // -------------------- LOGIN --------------------
 export const login = async (req: Request, res: Response): Promise<void> => {
     try {
-        const result: any = await loginUser(req.body);
+        const result: any = await loginUser(req.body, req);
 
         // If 2FA is enabled, require step-2 verification before issuing tokens/cookies
         if (result?.requires2FA) {
@@ -437,6 +437,7 @@ export const verifyLogin2FA = async (req: Request, res: Response): Promise<void>
         const { user, accessToken, refreshToken } = await verifyLogin2FAService(
             twoFactorToken,
             token,
+            req,
         );
 
         res.cookie('refreshToken', refreshToken, {
@@ -514,7 +515,7 @@ export const refreshAccessToken = async (
 // -------------------- LOGOUT --------------------
 export const logout = async (req: Request, res: Response): Promise<void> => {
     try {
-        await logoutUser();
+        await logoutUser(req);
 
         res.clearCookie('refreshToken');
         res.clearCookie('isLoggedIn'); // Clear the hint ⭐

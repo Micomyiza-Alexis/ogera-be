@@ -20,6 +20,7 @@ import { DisputeModel } from '@/database/models/dispute.model';
 import { DisputeEvidenceModel } from '@/database/models/disputeEvidence.model';
 import { DisputeMessageModel } from '@/database/models/disputeMessage.model';
 import { DisputeTimelineModel } from '@/database/models/disputeTimeline.model';
+import { SessionModel } from '@/database/models/session.model';
 
 export const setupAssociations = () => {
     // ====================== USER ↔ ROLE ======================
@@ -483,6 +484,21 @@ export const setupAssociations = () => {
     DisputeTimelineModel.belongsTo(UserModel, {
         foreignKey: 'performed_by',
         as: 'performer',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    // ====================== USER ↔ SESSION ======================
+    UserModel.hasMany(SessionModel, {
+        foreignKey: 'user_id',
+        as: 'sessions',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    SessionModel.belongsTo(UserModel, {
+        foreignKey: 'user_id',
+        as: 'user',
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE',
     });

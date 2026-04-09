@@ -27,6 +27,7 @@ import disputeModel from './models/dispute.model';
 import disputeEvidenceModel from './models/disputeEvidence.model';
 import disputeMessageModel from './models/disputeMessage.model';
 import disputeTimelineModel from './models/disputeTimeline.model';
+import sessionModel from './models/session.model';
 import { setupAssociations } from '@/association/index';
 
 import {
@@ -147,6 +148,7 @@ const Disputes = disputeModel(sequelize);
 const DisputeEvidence = disputeEvidenceModel(sequelize);
 const DisputeMessages = disputeMessageModel(sequelize);
 const DisputeTimeline = disputeTimelineModel(sequelize);
+const Sessions = sessionModel(sequelize);
 
 // Apply Associations
 setupAssociations();
@@ -852,6 +854,7 @@ export const DB = {
     DisputeEvidence,
     DisputeMessages,
     DisputeTimeline,
+    Sessions,
     sequelize,
     Sequelize,
 };
