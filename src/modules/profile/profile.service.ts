@@ -255,7 +255,11 @@ export const uploadProfileImageService = async (user_id: string, file: Express.M
         const baseUrl = process.env.BASE_URL?.replace('/api', '') || `http://localhost:${process.env.PORT || 5000}`;
         imageUrl = `${baseUrl}/uploads/profile-images/${fileName}`;
     }
-    await DB.Users.update({ profile_image_url: imageUrl }, { where: { user_id } });
+    try {
+        await DB.Users.update({ profile_image_url: imageUrl }, { where: { user_id } });
+    } catch (err: any) {
+        console.warn('⚠️ Could not update profile_image_url column:', err.message);
+    }
     return { profile_image_url: imageUrl };
 };
 
