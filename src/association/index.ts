@@ -21,6 +21,7 @@ import { DisputeEvidenceModel } from '@/database/models/disputeEvidence.model';
 import { DisputeMessageModel } from '@/database/models/disputeMessage.model';
 import { DisputeTimelineModel } from '@/database/models/disputeTimeline.model';
 import { SessionModel } from '@/database/models/session.model';
+import { TaskModel } from '@/database/models/task.model';
 
 export const setupAssociations = () => {
     // ====================== USER ↔ ROLE ======================
@@ -499,6 +500,35 @@ export const setupAssociations = () => {
     SessionModel.belongsTo(UserModel, {
         foreignKey: 'user_id',
         as: 'user',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    // ====================== JOB TASKS ======================
+    JobModel.hasMany(TaskModel, {
+        foreignKey: 'job_id',
+        as: 'tasks',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    TaskModel.belongsTo(JobModel, {
+        foreignKey: 'job_id',
+        as: 'job',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    UserModel.hasMany(TaskModel, {
+        foreignKey: 'assigned_student_id',
+        as: 'assignedTasks',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    TaskModel.belongsTo(UserModel, {
+        foreignKey: 'assigned_student_id',
+        as: 'assignedStudent',
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE',
     });

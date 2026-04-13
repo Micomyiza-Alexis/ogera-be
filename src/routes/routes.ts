@@ -15,6 +15,7 @@ import pesapalRouter from '@/modules/pesapal/pesapal.routes';
 import momoRouter from '@/modules/momo/momo.routes';
 import dashboardRouter from '@/modules/dashboard/dashboard.routes';
 import disputeRouter from '@/modules/dispute/dispute.routes';
+import taskRouter from '@/modules/task/task.routes';
 import express from 'express';
 
 const router = express.Router();
@@ -36,5 +37,6 @@ router.use('/payments', pesapalRouter);
 router.use('/momo', momoRouter);
 router.use('/dashboard', dashboardRouter);
 router.use('/disputes', disputeRouter);
+router.use('/', taskRouter);
 
 export default router;
