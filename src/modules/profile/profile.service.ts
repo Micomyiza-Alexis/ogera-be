@@ -246,7 +246,6 @@ export const getFullProfileService = async (user_id: string) => {
     return fullProfile;
 };
 
-<<<<<<< HEAD
 // ====================== PROFILE IMAGE UPLOAD ======================
 export const uploadProfileImageService = async (user_id: string, file: Express.Multer.File) => {
     const { path: filePath, storageType } = await saveFile(file, 'profile-images');
@@ -347,10 +346,11 @@ export const updateProfileImageUrlService = async (user_id: string, profile_imag
         missingFields: completion.missingFields,
         completedFields: completion.completedFields,
     };
-=======
+};
+
+// ====================== OTHER USER FULL PROFILE ======================
 export const getOtherUserFullProfileService = async (target_user_id: string) => {
     const fullProfile = await repo.getFullProfile(target_user_id);
     return fullProfile;
->>>>>>> a62c9831 (Backend improvements: auth, profile, database and routes updates)
 };
 
