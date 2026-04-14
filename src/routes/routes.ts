@@ -1,6 +1,7 @@
 import authRouter from '@/modules/auth/auth.routes';
 import roleRouter from '@/modules/role/role.routes';
 import permissionRouter from '@/modules/permission/permission.routes';
+import sessionRouter from '@/modules/session/session.routes';
 import jobRouter from '@/modules/job/job.routes';
 import jobCategoryRouter from '@/modules/jobCategory/jobCategory.routes';
 import jobApplicationRouter from '@/modules/jobApplication/jobApplication.routes';
@@ -14,6 +15,8 @@ import pesapalRouter from '@/modules/pesapal/pesapal.routes';
 import momoRouter from '@/modules/momo/momo.routes';
 import dashboardRouter from '@/modules/dashboard/dashboard.routes';
 import disputeRouter from '@/modules/dispute/dispute.routes';
+import taskRouter from '@/modules/task/task.routes';
+import messagesRouter from '@/modules/messages/messages.routes';
 import express from 'express';
 
 const router = express.Router();
@@ -21,6 +24,7 @@ const router = express.Router();
 router.use('/auth', authRouter);
 router.use('/roles', roleRouter);
 router.use('/permissions', permissionRouter);
+router.use('/sessions', sessionRouter);
 router.use('/jobs', jobRouter);
 router.use('/job-categories', jobCategoryRouter);
 router.use('/', jobApplicationRouter);
@@ -34,5 +38,7 @@ router.use('/payments', pesapalRouter);
 router.use('/momo', momoRouter);
 router.use('/dashboard', dashboardRouter);
 router.use('/disputes', disputeRouter);
+router.use('/messages', messagesRouter);
+router.use('/', taskRouter);
 
 export default router;

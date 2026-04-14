@@ -352,3 +352,9 @@ export const updateProfileImageUrlService = async (user_id: string, profile_imag
     };
 };
 
+// ====================== OTHER USER FULL PROFILE ======================
+export const getOtherUserFullProfileService = async (target_user_id: string) => {
+    const fullProfile = await repo.getFullProfile(target_user_id);
+    return fullProfile;
+};
+
