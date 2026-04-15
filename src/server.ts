@@ -22,8 +22,11 @@ const port = process.env.PORT || 5000;
 // const corsOrigin = FRONTEND_URL || 'http://localhost:5173';
 const allowedOrigins = [
   'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:3001',
   'https://ogera-frontend.vercel.app',
-  'https://app.ogera.sybellasystems.co.rw'
+  'https://app.ogera.sybellasystems.co.rw',
+  'https://ogera.sybellasystems.co.rw',
 ];
 
 // In development we allow all origins; in production we reflect the configured frontend URL.

@@ -238,6 +238,20 @@ export const registerUser = async (data: any, frontendOrigin?: string) => {
         console.error('Failed to send verification email:', error);
     }
 
+    // Save selected category as a skill (students only, from signup step 2)
+    if (typeof data.category === 'string' && data.category.trim()) {
+        try {
+            await DB.UserSkills.create({
+                user_id: user.user_id,
+                skill_name: data.category.trim(),
+                skill_type: 'key_skill',
+            } as any);
+        } catch (error) {
+            // Category save failing should not block registration
+            console.error('Failed to save signup category:', error);
+        }
+    }
+
     // Generate + send phone verification OTP right after signup.
     // This matches the signup flow: SMS OTP goes to the registered mobile number.
     // For development/testing, `sendPhoneVerificationOTPService` returns `otp`.
@@ -249,10 +263,18 @@ export const registerUser = async (data: any, frontendOrigin?: string) => {
         console.error('Failed to send phone verification OTP:', error);
     }
 
+    // Issue tokens so the new account can auto-login straight to the dashboard.
+    // The dashboard will show a "please verify" banner until email + phone are confirmed.
+    const tokenPayload = { user_id: user.user_id, role: role.roleName };
+    const accessToken = generateAccessToken(tokenPayload);
+    const refreshToken = generateRefreshToken(tokenPayload);
+
     return {
         user: sanitizeUser(user),
         phoneNumber: user.mobile_number,
         phoneVerificationOtp,
+        accessToken,
+        refreshToken,
     };
 };
 

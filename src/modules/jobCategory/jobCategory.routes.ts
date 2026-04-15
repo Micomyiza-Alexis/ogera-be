@@ -14,14 +14,12 @@ const jobCategoryRouter = express.Router();
 // Get all categories - public endpoint (for dropdowns)
 jobCategoryRouter.get(
     '/',
-    authMiddleware,
     getAllCategories,
 );
 
 // Get category by ID
 jobCategoryRouter.get(
     '/:id',
-    authMiddleware,
     getCategoryById,
 );
 

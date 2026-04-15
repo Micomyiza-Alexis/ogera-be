@@ -24,6 +24,7 @@ export const getMetrics = async (
       totalStudents: Number(metrics.totalStudents ?? 0),
       activeJobs: Number(metrics.activeJobs ?? 0),
       totalEarnings: Number(metrics.totalEarnings ?? 0),
+      weeklyGrowth: metrics.weeklyGrowth ?? [],
     };
 
     logger.info("[Dashboard Controller] Sending metrics response:", safeMetrics);

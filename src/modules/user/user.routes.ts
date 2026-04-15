@@ -3,11 +3,17 @@ import {
     getAllUsers,
     getAllStudents,
     getAllEmployers,
+    getPublicWorkers,
+    getPublicWorkerById,
 } from './user.controller';
 import { authMiddleware } from '@/middlewares/auth.middleware';
 import { PermissionChecker } from '@/middlewares/role.middleware';
 
 const userRouter = express.Router();
+
+// Public endpoints for landing page - must be before auth-protected routes
+userRouter.get('/workers', getPublicWorkers);
+userRouter.get('/workers/:id', getPublicWorkerById);
 
 // Get all users - requires view permission
 userRouter.get(

@@ -97,6 +97,34 @@ export const applyForJobService = async (
         );
     }
 
+    // ===== Required document validation =====
+    // Cover letter: required, minimum 50 characters.
+    const coverLetter = (applicationData.cover_letter || '').trim();
+    if (!coverLetter) {
+        throw new CustomError(
+            'A cover letter is required to apply',
+            StatusCodes.BAD_REQUEST,
+        );
+    }
+    if (coverLetter.length < 50) {
+        throw new CustomError(
+            'Cover letter is too short — please write at least 50 characters',
+            StatusCodes.BAD_REQUEST,
+        );
+    }
+
+    // Resume: required. Accept either one uploaded with this request,
+    // OR one already stored on the student's profile.
+    const resumeUrl = applicationData.resume_url || (student as any).resume_url;
+    if (!resumeUrl) {
+        throw new CustomError(
+            'A resume is required — upload one to your profile or attach it to this application',
+            StatusCodes.BAD_REQUEST,
+        );
+    }
+    // Make sure the application row carries the resolved resume_url
+    applicationData.resume_url = resumeUrl;
+
     // Check if job exists and get questions
     const job = await DB.Jobs.findOne({
         where: { job_id },

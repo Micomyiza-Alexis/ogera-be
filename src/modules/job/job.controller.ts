@@ -224,7 +224,20 @@ export const deleteJob = async (
     next: NextFunction,
 ) => {
     try {
-        const result = await deleteJobService(req.params.id as string);
+        if (!req.user) {
+            response.errorResponse(
+                res,
+                StatusCodes.UNAUTHORIZED,
+                false,
+                'User not authenticated',
+            );
+            return;
+        }
+        const result = await deleteJobService(
+            req.params.id as string,
+            req.user.user_id,
+            req.user.role,
+        );
         response.response(
             res,
             true,

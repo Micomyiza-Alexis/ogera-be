@@ -4,14 +4,13 @@
         "module": "commonjs",
         "outDir": "./dist",
         "rootDir": "./src",
-        "baseUrl": "./src",
         "paths": {
-            "@/*": ["*"],
-            "@routes/*": ["routes/*"],
-            "@database/*": ["database/*"],
-            "@utils/*": ["utils/*"],
-            "@types/*": ["types/*"],
-            "@modules/*": ["modules/*"]
+            "@/*": ["./src/*"],
+            "@routes/*": ["./src/routes/*"],
+            "@database/*": ["./src/database/*"],
+            "@utils/*": ["./src/utils/*"],
+            "@types/*": ["./src/types/*"],
+            "@modules/*": ["./src/modules/*"]
         },
         "esModuleInterop": true,
         "typeRoots": ["node_modules/@types"],

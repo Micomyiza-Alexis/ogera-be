@@ -11,6 +11,7 @@ export interface DashboardMetrics {
   totalStudents: number;
   activeJobs: number;
   totalEarnings: number;
+  weeklyGrowth: Array<{ day: string; students: number; employers: number }>;
 }
 
 /**
@@ -35,6 +36,9 @@ export interface StudentDashboardResponse {
     value: number; // total amount received via MoMo payouts (jobs.amount_paid_to_student)
     currency: string | null;
   };
+  weeklyActivity: Array<{ day: string; applications: number; completed: number }>;
+  rates: { jobCompletionRate: number; applicationSuccessRate: number };
+  applicationBreakdown: { pending: number; shortlisted: number; accepted: number; rejected: number; total: number };
 }
 
 /**
@@ -58,6 +62,18 @@ export interface EmployerDashboardResponse {
     change: number | null;
     currency: string | null;
   };
+  weeklyActivity: Array<{ day: string; applications: number; hires: number }>;
+  applicationBreakdown: { pending: number; shortlisted: number; accepted: number; rejected: number; total: number };
+  recentApplicants: Array<{
+    application_id: string;
+    student_id: string;
+    student_name: string;
+    student_image: string | null;
+    job_id: string;
+    job_title: string;
+    status: string;
+    applied_at: Date;
+  }>;
 }
 
 /**
@@ -95,6 +111,12 @@ export const getStudentDashboard = async (userId: string, periodDays = 30): Prom
       const earnings = await repo.getStudentTotalEarnings(userId);
       // Note: earnings trend can still be computed later using getStudentEarningsBetween.
 
+      const [weeklyActivity, rates, applicationBreakdown] = await Promise.all([
+        repo.getStudentWeeklyActivity(userId),
+        repo.getStudentRates(userId),
+        repo.getStudentApplicationStatusBreakdown(userId),
+      ]);
+
       const result: StudentDashboardResponse = {
         applications: {
           value: currentApplications,
@@ -112,6 +134,9 @@ export const getStudentDashboard = async (userId: string, periodDays = 30): Prom
           value: earnings.total ?? 0,
           currency: earnings.currency || null,
         },
+        weeklyActivity,
+        rates,
+        applicationBreakdown,
       };
 
       return result;
@@ -156,6 +181,12 @@ export const getEmployerDashboard = async (employerId: string, periodDays = 30):
         repo.getEmployerSpentBetween(employerId, prevStart, prevEnd),
       ]);
 
+      const [weeklyActivity, applicationBreakdown, recentApplicants] = await Promise.all([
+        repo.getEmployerWeeklyActivity(employerId),
+        repo.getEmployerApplicationStatusBreakdown(employerId),
+        repo.getEmployerRecentApplicants(employerId, 5),
+      ]);
+
       return {
         jobsPosted: {
           value: currentJobsPosted,
@@ -174,6 +205,9 @@ export const getEmployerDashboard = async (employerId: string, periodDays = 30):
           change: currentSpent - previousSpent,
           currency: '$',
         },
+        weeklyActivity,
+        applicationBreakdown,
+        recentApplicants,
       };
     } catch (error) {
       logger.error('[Dashboard Service] Error fetching employer dashboard:', error);
@@ -190,11 +224,12 @@ export const getDashboardMetrics = async (): Promise<DashboardMetrics> => {
   try {
     logger.info("[Dashboard] Fetching dashboard metrics...");
     
-    const [totalUsers, totalStudents, activeJobs, totalEarnings] = await Promise.all([
+    const [totalUsers, totalStudents, activeJobs, totalEarnings, weeklyGrowth] = await Promise.all([
       repo.getTotalUsersCount(),
       repo.getTotalStudentsCount(),
       repo.getActiveJobsCount(),
       repo.getTotalEarnings(),
+      repo.getAdminWeeklyGrowth(),
     ]);
 
     const metrics = {
@@ -202,6 +237,7 @@ export const getDashboardMetrics = async (): Promise<DashboardMetrics> => {
       totalStudents,
       activeJobs,
       totalEarnings,
+      weeklyGrowth,
     };
 
     logger.info("[Dashboard] Metrics fetched successfully:", metrics);
