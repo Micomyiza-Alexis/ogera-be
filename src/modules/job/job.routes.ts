@@ -23,11 +23,9 @@ jobRouter.get(
     getAllJobs,
 );
 
-// Get active jobs
+// Get active jobs - public endpoint for landing page
 jobRouter.get(
     '/active',
-    authMiddleware,
-    PermissionChecker('/jobs', 'view'),
     getActiveJobs,
 );
 
@@ -47,10 +45,9 @@ jobRouter.get(
     getCompletedJobs,
 );
 
+// Get single job by ID - public endpoint for landing page
 jobRouter.get(
     '/:id',
-    authMiddleware,
-    PermissionChecker('/jobs', 'view'),
     getJobById,
 );
 
@@ -70,11 +67,12 @@ jobRouter.put(
     updateJob,
 );
 
-// Delete job - requires delete permission
+// Delete job — service enforces: admin/superadmin can delete any job,
+// employers can delete their own. No permission_json gate because admins
+// without "/jobs delete" in their JSON permissions were being blocked.
 jobRouter.delete(
     '/:id',
     authMiddleware,
-    PermissionChecker('/jobs', 'delete'),
     deleteJob,
 );
 

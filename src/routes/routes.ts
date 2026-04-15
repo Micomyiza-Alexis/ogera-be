@@ -15,8 +15,13 @@ import pesapalRouter from '@/modules/pesapal/pesapal.routes';
 import momoRouter from '@/modules/momo/momo.routes';
 import dashboardRouter from '@/modules/dashboard/dashboard.routes';
 import disputeRouter from '@/modules/dispute/dispute.routes';
+
+import contactRouter from '@/modules/contact/contact.routes';
+import interviewRouter from '@/modules/interview/interview.routes';
+
 import taskRouter from '@/modules/task/task.routes';
 import messagesRouter from '@/modules/messages/messages.routes';
+
 import express from 'express';
 
 const router = express.Router();
@@ -38,7 +43,12 @@ router.use('/payments', pesapalRouter);
 router.use('/momo', momoRouter);
 router.use('/dashboard', dashboardRouter);
 router.use('/disputes', disputeRouter);
+
+router.use('/contact', contactRouter);
+router.use('/interviews', interviewRouter);
+
 router.use('/messages', messagesRouter);
 router.use('/', taskRouter);
+
 
 export default router;

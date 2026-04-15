@@ -393,6 +393,109 @@ const repo = {
     }
   },
   /**
+   * Employer application status breakdown — counts applications (across all their jobs) by status
+   */
+  getEmployerApplicationStatusBreakdown: async (employerId: string): Promise<{
+    pending: number;
+    shortlisted: number;
+    accepted: number;
+    rejected: number;
+    total: number;
+  }> => {
+    try {
+      const rows: Array<{ status: string; count: string }> = await DB.JobApplications.findAll({
+        include: [
+          {
+            model: DB.Jobs,
+            as: 'job',
+            required: true,
+            where: { employer_id: employerId },
+            attributes: [],
+          },
+        ],
+        attributes: [
+          'status',
+          [DB.sequelize.fn('COUNT', DB.sequelize.col('JobApplicationModel.application_id')), 'count'],
+        ],
+        group: ['JobApplicationModel.status'],
+        raw: true,
+      }) as any;
+
+      const breakdown = { pending: 0, shortlisted: 0, accepted: 0, rejected: 0, total: 0 };
+      for (const r of rows) {
+        const n = Number(r.count) || 0;
+        const s = String(r.status || '').toLowerCase();
+        if (s === 'pending') breakdown.pending += n;
+        else if (s === 'shortlisted' || s === 'reviewed') breakdown.shortlisted += n;
+        else if (s === 'accepted') breakdown.accepted += n;
+        else if (s === 'rejected') breakdown.rejected += n;
+        breakdown.total += n;
+      }
+      return breakdown;
+    } catch (error) {
+      logger.error('[Dashboard] Error computing employer application breakdown:', error);
+      return { pending: 0, shortlisted: 0, accepted: 0, rejected: 0, total: 0 };
+    }
+  },
+
+  /**
+   * Recent applicants for an employer — last N students who applied to any of their jobs
+   */
+  getEmployerRecentApplicants: async (
+    employerId: string,
+    limit = 5,
+  ): Promise<Array<{
+    application_id: string;
+    student_id: string;
+    student_name: string;
+    student_image: string | null;
+    job_id: string;
+    job_title: string;
+    status: string;
+    applied_at: Date;
+  }>> => {
+    try {
+      const rows: any[] = await DB.JobApplications.findAll({
+        attributes: ['application_id', 'student_id', 'status', 'applied_at'],
+        include: [
+          {
+            model: DB.Jobs,
+            as: 'job',
+            required: true,
+            where: { employer_id: employerId },
+            attributes: ['job_id', 'job_title'],
+          },
+          {
+            model: DB.Users,
+            as: 'student',
+            required: false,
+            attributes: ['user_id', 'full_name', 'profile_image_url'],
+          },
+        ],
+        order: [['applied_at', 'DESC']],
+        limit,
+      });
+
+      return rows.map((r) => {
+        const plain = r.get({ plain: true });
+        return {
+          application_id: plain.application_id,
+          student_id: plain.student_id,
+          student_name: plain.student?.full_name || 'Unknown student',
+          student_image: plain.student?.profile_image_url || null,
+          job_id: plain.job?.job_id,
+          job_title: plain.job?.job_title || 'Untitled job',
+          status: plain.status,
+          applied_at: plain.applied_at,
+        };
+      });
+    } catch (error) {
+      logger.error('[Dashboard] Error fetching recent applicants:', error);
+      return [];
+    }
+  },
+
+  /**
    * Sum employer funded + paid budgets in a date range.
    */
   getEmployerSpentBetween: async (employerId: string, start: Date, end: Date): Promise<number> => {
@@ -445,6 +548,147 @@ const repo = {
       } catch (error) {
         logger.error('[Dashboard] Error counting jobs completed:', error);
         return 0;
+      }
+    },
+
+    /**
+     * Build a 7-day daily timeline (Mon..Sun of the last 7 days, ending today).
+     * Returns array of { day: 'Mon'|'Tue'..., date: Date }
+     */
+    buildLast7Days: (): Array<{ day: string; start: Date; end: Date }> => {
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const result: Array<{ day: string; start: Date; end: Date }> = [];
+      const now = new Date();
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(now.getDate() - i);
+        d.setHours(0, 0, 0, 0);
+        const next = new Date(d);
+        next.setDate(d.getDate() + 1);
+        result.push({ day: dayNames[d.getDay()], start: d, end: next });
+      }
+      return result;
+    },
+
+    /** Student weekly activity: applications + jobs completed per day for last 7 days */
+    getStudentWeeklyActivity: async (studentId: string): Promise<Array<{ day: string; applications: number; completed: number }>> => {
+      try {
+        const days = repo.buildLast7Days();
+        const out: Array<{ day: string; applications: number; completed: number }> = [];
+        for (const d of days) {
+          const applications = await repo.getStudentApplicationsCountBetween(studentId, d.start, d.end);
+          const completed = await repo.getStudentJobsCompletedBetween(studentId, d.start, d.end);
+          out.push({ day: d.day, applications, completed });
+        }
+        return out;
+      } catch (error) {
+        logger.error('[Dashboard] Error building student weekly activity:', error);
+        return [];
+      }
+    },
+
+    /** Employer weekly activity: applications received + active hires per day for last 7 days */
+    getEmployerWeeklyActivity: async (employerId: string): Promise<Array<{ day: string; applications: number; hires: number }>> => {
+      try {
+        const days = repo.buildLast7Days();
+        const out: Array<{ day: string; applications: number; hires: number }> = [];
+        for (const d of days) {
+          const applications = await repo.getEmployerApplicationsReceivedBetween(employerId, d.start, d.end);
+          const hires = await repo.getEmployerActiveHiresBetween(employerId, d.start, d.end);
+          out.push({ day: d.day, applications, hires });
+        }
+        return out;
+      } catch (error) {
+        logger.error('[Dashboard] Error building employer weekly activity:', error);
+        return [];
+      }
+    },
+
+    /** Admin weekly growth: new students + new employers per day for last 7 days */
+    getAdminWeeklyGrowth: async (): Promise<Array<{ day: string; students: number; employers: number }>> => {
+      try {
+        const { Op } = require('sequelize');
+        const days = repo.buildLast7Days();
+        const out: Array<{ day: string; students: number; employers: number }> = [];
+        for (const d of days) {
+          const [students, employers] = await Promise.all([
+            DB.Users.count({
+              where: { role_type: 'student', created_at: { [Op.gte]: d.start, [Op.lt]: d.end } },
+            }),
+            DB.Users.count({
+              where: { role_type: 'employer', created_at: { [Op.gte]: d.start, [Op.lt]: d.end } },
+            }),
+          ]);
+          out.push({ day: d.day, students: Number(students ?? 0), employers: Number(employers ?? 0) });
+        }
+        return out;
+      } catch (error) {
+        logger.error('[Dashboard] Error building admin weekly growth:', error);
+        return [];
+      }
+    },
+
+    /** Student application status breakdown — counts by status across all-time */
+    getStudentApplicationStatusBreakdown: async (studentId: string): Promise<{
+      pending: number;
+      shortlisted: number;
+      accepted: number;
+      rejected: number;
+      total: number;
+    }> => {
+      try {
+        const rows: Array<{ status: string; count: string }> = await DB.JobApplications.findAll({
+          where: { student_id: studentId },
+          attributes: [
+            'status',
+            [DB.sequelize.fn('COUNT', DB.sequelize.col('application_id')), 'count'],
+          ],
+          group: ['status'],
+          raw: true,
+        }) as any;
+
+        const breakdown = { pending: 0, shortlisted: 0, accepted: 0, rejected: 0, total: 0 };
+        for (const r of rows) {
+          const n = Number(r.count) || 0;
+          const s = String(r.status || '').toLowerCase();
+          if (s === 'pending') breakdown.pending += n;
+          else if (s === 'shortlisted' || s === 'reviewed') breakdown.shortlisted += n;
+          else if (s === 'accepted') breakdown.accepted += n;
+          else if (s === 'rejected') breakdown.rejected += n;
+          breakdown.total += n;
+        }
+        return breakdown;
+      } catch (error) {
+        logger.error('[Dashboard] Error computing application status breakdown:', error);
+        return { pending: 0, shortlisted: 0, accepted: 0, rejected: 0, total: 0 };
+      }
+    },
+
+    /** Student rates: job completion % and application success % across all-time */
+    getStudentRates: async (studentId: string): Promise<{ jobCompletionRate: number; applicationSuccessRate: number }> => {
+      try {
+        const { Op } = require('sequelize');
+        const totalApplications = await DB.JobApplications.count({
+          where: { student_id: studentId },
+        });
+        const acceptedApplications = await DB.JobApplications.count({
+          where: { student_id: studentId, status: 'Accepted' },
+        });
+        const completedApplications = await DB.JobApplications.count({
+          where: { student_id: studentId, completed_at: { [Op.ne]: null } } as any,
+        });
+
+        const applicationSuccessRate = totalApplications > 0
+          ? Math.round((acceptedApplications / totalApplications) * 100)
+          : 0;
+        const jobCompletionRate = acceptedApplications > 0
+          ? Math.round((completedApplications / acceptedApplications) * 100)
+          : 0;
+
+        return { jobCompletionRate, applicationSuccessRate };
+      } catch (error) {
+        logger.error('[Dashboard] Error computing student rates:', error);
+        return { jobCompletionRate: 0, applicationSuccessRate: 0 };
       }
     },
 

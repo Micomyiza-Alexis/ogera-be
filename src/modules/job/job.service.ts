@@ -92,7 +92,10 @@ export const createJobService = async (
     const jobPayload = {
         employer_id,
         ...jobPayloadData,
-        status: jobPayloadData.status || 'Pending', // New jobs default to Pending for approval
+        // New jobs go live immediately so they appear on the landing page without
+        // needing manual admin approval. Admins can still move a job to Inactive
+        // from the pending/approval screens if they need to intervene.
+        status: jobPayloadData.status || 'Active',
     };
 
     const job = await repo.createJob(jobPayload);
@@ -228,7 +231,35 @@ export const updateJobService = async (
         return updated;
 };
 
-export const deleteJobService = async (job_id: string) => {
+export const deleteJobService = async (
+    job_id: string,
+    user_id: string,
+    userRole: string,
+) => {
+    // Load the job to verify it exists and check ownership.
+    const job = await repo.findJobById(job_id);
+    if (!job) {
+        throw new CustomError(
+            Messages.Job.JOB_NOT_FOUND,
+            StatusCodes.NOT_FOUND,
+        );
+    }
+
+    // Access rules:
+    //  - superadmin / admin (any casing): can delete ANY job
+    //  - employer: can only delete their OWN jobs
+    //  - anyone else: forbidden
+    const role = (userRole || '').toLowerCase();
+    const isAdmin = role === 'admin' || role === 'superadmin';
+    const isOwner = job.employer_id === user_id;
+
+    if (!isAdmin && !isOwner) {
+        throw new CustomError(
+            'You can only delete your own jobs',
+            StatusCodes.FORBIDDEN,
+        );
+    }
+
     const deleted = await repo.deleteJob(job_id);
     if (!deleted) {
         throw new CustomError(
