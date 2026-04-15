@@ -27,6 +27,11 @@ import disputeModel from './models/dispute.model';
 import disputeEvidenceModel from './models/disputeEvidence.model';
 import disputeMessageModel from './models/disputeMessage.model';
 import disputeTimelineModel from './models/disputeTimeline.model';
+import cognitiveTestModel from './models/cognitiveTest.model';
+import cognitiveQuestionModel from './models/cognitiveQuestion.model';
+import userTestModel from './models/userTest.model';
+import userFeedbackModel from './models/userFeedback.model';
+import trustscoreHistoryModel from './models/trustscoreHistory.model';
 import { setupAssociations } from '@/association/index';
 
 import {
@@ -147,6 +152,11 @@ const Disputes = disputeModel(sequelize);
 const DisputeEvidence = disputeEvidenceModel(sequelize);
 const DisputeMessages = disputeMessageModel(sequelize);
 const DisputeTimeline = disputeTimelineModel(sequelize);
+const CognitiveTests = cognitiveTestModel(sequelize);
+const CognitiveQuestions = cognitiveQuestionModel(sequelize);
+const UserTests = userTestModel(sequelize);
+const UserFeedbacks = userFeedbackModel(sequelize);
+const TrustscoreHistory = trustscoreHistoryModel(sequelize);
 
 // Apply Associations
 setupAssociations();
@@ -615,6 +625,28 @@ const ensureUserTableColumns = async () => {
         allowNull: true,
     });
 
+    // TrustScore (I/E/C) cached columns on users
+    await ensureColumnExists('users', 'intelligence_score', {
+        type: Sequelize.DataTypes.FLOAT,
+        allowNull: true,
+    });
+    await ensureColumnExists('users', 'experience_score', {
+        type: Sequelize.DataTypes.FLOAT,
+        allowNull: true,
+    });
+    await ensureColumnExists('users', 'interaction_score', {
+        type: Sequelize.DataTypes.FLOAT,
+        allowNull: true,
+    });
+    await ensureColumnExists('users', 'trust_score', {
+        type: Sequelize.DataTypes.FLOAT,
+        allowNull: true,
+    });
+    await ensureColumnExists('users', 'trust_level', {
+        type: Sequelize.DataTypes.STRING(32),
+        allowNull: true,
+    });
+
     // Handle role_type column - rename from 'role' if it exists, or add if missing
     try {
         const tableDescription = await queryInterface.describeTable('users');
@@ -852,6 +884,11 @@ export const DB = {
     DisputeEvidence,
     DisputeMessages,
     DisputeTimeline,
+    CognitiveTests,
+    CognitiveQuestions,
+    UserTests,
+    UserFeedbacks,
+    TrustscoreHistory,
     sequelize,
     Sequelize,
 };

@@ -1,22 +1,54 @@
-export interface TrustScore {
+export type TrustLevel =
+    | 'Limited'
+    | 'Emerging'
+    | 'Developing'
+    | 'Competent'
+    | 'Exceptional';
+
+/** Public API payload: I/E/C are normalized 0-1; percents are 0-100 for UI */
+export interface TrustScorePayload {
     user_id: string;
     trust_score: number;
-    email_verified: boolean;
-    phone_verified: boolean;
-    academic_verified: boolean;
-    breakdown: {
-        email_verification_score: number;
-        phone_verification_score: number;
-        academic_verification_score: number;
-    };
-    level: 'Limited' | 'Emerging' | 'Developing' | 'Competent' | 'Exceptional';
+    intelligence_score: number;
+    experience_score: number;
+    interaction_score: number;
+    intelligence_percent: number;
+    experience_percent: number;
+    interaction_percent: number;
+    level: TrustLevel;
     description: string;
+    suggestions: string[];
+    /** cached = read from users row; computed = live from source tables (not yet saved) */
+    source: 'cached' | 'computed';
 }
 
-export interface TrustScoreBreakdown {
-    email_verification_score: number;
-    phone_verification_score: number;
-    academic_verification_score: number;
-    total_score: number;
+export interface TrustScoreHistoryItem {
+    history_id: string;
+    user_id: string;
+    intelligence_score: number | null;
+    experience_score: number | null;
+    interaction_score: number | null;
+    trust_score: number | null;
+    trust_level: string | null;
+    computed_at: Date;
 }
 
+export interface LeaderboardStudentRow {
+    user_id: string;
+    full_name: string;
+    email: string;
+    trust_score: number | null;
+    trust_level: string | null;
+}
+
+export interface TrustAdminSummary {
+    average_trust_score: number | null;
+    students_with_score: number;
+    top_users: LeaderboardStudentRow[];
+    distribution: {
+        label: string;
+        min: number;
+        max: number;
+        count: number;
+    }[];
+}

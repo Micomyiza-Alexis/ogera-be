@@ -1,5 +1,7 @@
 import { StatusCodes } from 'http-status-codes';
 import { CustomError } from '@/utils/custom-error';
+import logger from '@/utils/logger';
+import { calculateTrustScoreService } from '@/modules/trustScore/trustScore.service';
 import repo from './profile.repo';
 import {
     CreateSkillRequest,
@@ -9,6 +11,16 @@ import {
     CreateAccomplishmentRequest,
     UpdateExtendedProfileRequest,
 } from '@/interfaces/profile.interfaces';
+
+async function refreshTrustScoreAfterProfileChange(user_id: string): Promise<void> {
+    try {
+        await calculateTrustScoreService(user_id);
+    } catch (err: any) {
+        logger.warn(
+            `TrustScore refresh after profile change failed for ${user_id}: ${err?.message || err}`,
+        );
+    }
+}
 
 // ====================== SKILLS ======================
 export const addSkillService = async (user_id: string, data: CreateSkillRequest) => {
@@ -71,6 +83,7 @@ export const addEmploymentService = async (user_id: string, data: CreateEmployme
     }
     
     const employment = await repo.createEmployment(user_id, data);
+    await refreshTrustScoreAfterProfileChange(user_id);
     return employment;
 };
 
@@ -99,6 +112,7 @@ export const updateEmploymentService = async (user_id: string, employment_id: st
     }
     
     await repo.updateEmployment(employment_id, data);
+    await refreshTrustScoreAfterProfileChange(user_id);
     return repo.findEmploymentById(employment_id);
 };
 
@@ -112,6 +126,7 @@ export const deleteEmploymentService = async (user_id: string, employment_id: st
     }
     
     await repo.deleteEmployment(employment_id);
+    await refreshTrustScoreAfterProfileChange(user_id);
     return { message: 'Employment deleted successfully' };
 };
 
@@ -155,6 +170,7 @@ export const deleteEducationService = async (user_id: string, education_id: stri
 // ====================== PROJECTS ======================
 export const addProjectService = async (user_id: string, data: CreateProjectRequest) => {
     const project = await repo.createProject(user_id, data);
+    await refreshTrustScoreAfterProfileChange(user_id);
     return project;
 };
 
@@ -173,6 +189,7 @@ export const updateProjectService = async (user_id: string, project_id: string, 
     }
     
     await repo.updateProject(project_id, data);
+    await refreshTrustScoreAfterProfileChange(user_id);
     return repo.findProjectById(project_id);
 };
 
@@ -186,12 +203,14 @@ export const deleteProjectService = async (user_id: string, project_id: string) 
     }
     
     await repo.deleteProject(project_id);
+    await refreshTrustScoreAfterProfileChange(user_id);
     return { message: 'Project deleted successfully' };
 };
 
 // ====================== ACCOMPLISHMENTS ======================
 export const addAccomplishmentService = async (user_id: string, data: CreateAccomplishmentRequest) => {
     const accomplishment = await repo.createAccomplishment(user_id, data);
+    await refreshTrustScoreAfterProfileChange(user_id);
     return accomplishment;
 };
 
@@ -210,6 +229,7 @@ export const updateAccomplishmentService = async (user_id: string, accomplishmen
     }
     
     await repo.updateAccomplishment(accomplishment_id, data);
+    await refreshTrustScoreAfterProfileChange(user_id);
     return repo.findAccomplishmentById(accomplishment_id);
 };
 
@@ -223,6 +243,7 @@ export const deleteAccomplishmentService = async (user_id: string, accomplishmen
     }
     
     await repo.deleteAccomplishment(accomplishment_id);
+    await refreshTrustScoreAfterProfileChange(user_id);
     return { message: 'Accomplishment deleted successfully' };
 };
 

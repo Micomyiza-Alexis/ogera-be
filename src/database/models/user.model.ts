@@ -28,6 +28,11 @@ export type UserCreationAttributes = Optional<
     | 'phone_verification_otp'
     | 'phone_verification_otp_expiry'
     | 'role_type'
+    | 'intelligence_score'
+    | 'experience_score'
+    | 'interaction_score'
+    | 'trust_score'
+    | 'trust_level'
 >;
 
 export class UserModel
@@ -72,6 +77,12 @@ export class UserModel
 
     /** SRS: Balance from employer payments (RWF). Used for course fees/platform services. */
     public balance?: number | null;
+
+    public intelligence_score?: number | null;
+    public experience_score?: number | null;
+    public interaction_score?: number | null;
+    public trust_score?: number | null;
+    public trust_level?: string | null;
 
     public readonly created_at!: Date;
     public readonly updated_at!: Date;
@@ -265,6 +276,27 @@ export default function (sequelize: Sequelize): typeof UserModel {
 
             balance: {
                 type: DataTypes.DECIMAL(14, 2),
+                allowNull: true,
+            },
+
+            intelligence_score: {
+                type: DataTypes.FLOAT,
+                allowNull: true,
+            },
+            experience_score: {
+                type: DataTypes.FLOAT,
+                allowNull: true,
+            },
+            interaction_score: {
+                type: DataTypes.FLOAT,
+                allowNull: true,
+            },
+            trust_score: {
+                type: DataTypes.FLOAT,
+                allowNull: true,
+            },
+            trust_level: {
+                type: DataTypes.STRING(32),
                 allowNull: true,
             },
 

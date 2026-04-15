@@ -20,6 +20,11 @@ import { DisputeModel } from '@/database/models/dispute.model';
 import { DisputeEvidenceModel } from '@/database/models/disputeEvidence.model';
 import { DisputeMessageModel } from '@/database/models/disputeMessage.model';
 import { DisputeTimelineModel } from '@/database/models/disputeTimeline.model';
+import { UserTestModel } from '@/database/models/userTest.model';
+import { CognitiveTestModel } from '@/database/models/cognitiveTest.model';
+import { CognitiveQuestionModel } from '@/database/models/cognitiveQuestion.model';
+import { UserFeedbackModel } from '@/database/models/userFeedback.model';
+import { TrustscoreHistoryModel } from '@/database/models/trustscoreHistory.model';
 
 export const setupAssociations = () => {
     // ====================== USER ↔ ROLE ======================
@@ -241,6 +246,101 @@ export const setupAssociations = () => {
     });
 
     UserProjectModel.belongsTo(UserModel, {
+        foreignKey: 'user_id',
+        as: 'user',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    // ====================== USER ↔ USER TESTS (intelligence) ======================
+    UserModel.hasMany(UserTestModel, {
+        foreignKey: 'user_id',
+        as: 'userTests',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    UserTestModel.belongsTo(UserModel, {
+        foreignKey: 'user_id',
+        as: 'user',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    UserTestModel.belongsTo(CognitiveTestModel, {
+        foreignKey: 'cognitive_test_id',
+        as: 'cognitiveTest',
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
+    });
+
+    // ====================== COGNITIVE TESTS ======================
+    UserModel.hasMany(CognitiveTestModel, {
+        foreignKey: 'created_by',
+        as: 'cognitiveTestsCreated',
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
+    });
+
+    CognitiveTestModel.belongsTo(UserModel, {
+        foreignKey: 'created_by',
+        as: 'creator',
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
+    });
+
+    CognitiveTestModel.hasMany(CognitiveQuestionModel, {
+        foreignKey: 'cognitive_test_id',
+        as: 'questions',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    CognitiveQuestionModel.belongsTo(CognitiveTestModel, {
+        foreignKey: 'cognitive_test_id',
+        as: 'cognitiveTest',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    CognitiveTestModel.hasMany(UserTestModel, {
+        foreignKey: 'cognitive_test_id',
+        as: 'attempts',
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
+    });
+
+    // ====================== USER ↔ FEEDBACK (interaction) ======================
+    UserModel.hasMany(UserFeedbackModel, {
+        foreignKey: 'user_id',
+        as: 'feedbackReceived',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    UserFeedbackModel.belongsTo(UserModel, {
+        foreignKey: 'user_id',
+        as: 'ratedUser',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    UserFeedbackModel.belongsTo(UserModel, {
+        foreignKey: 'rater_user_id',
+        as: 'rater',
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
+    });
+
+    // ====================== USER ↔ TRUSTSCORE HISTORY ======================
+    UserModel.hasMany(TrustscoreHistoryModel, {
+        foreignKey: 'user_id',
+        as: 'trustscoreHistory',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    TrustscoreHistoryModel.belongsTo(UserModel, {
         foreignKey: 'user_id',
         as: 'user',
         onUpdate: 'CASCADE',

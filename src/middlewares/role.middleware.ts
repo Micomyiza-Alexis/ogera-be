@@ -137,6 +137,51 @@ export const adminOrSuperadminOnly = async (
     }
 };
 
+/** Only `superadmin` or built-in `admin` (by role name). Matches frontend isBuiltInAdmin for cognitive tests. */
+export const superadminOrBuiltInAdminOnly = async (
+    req: any,
+    _res: Response,
+    next: NextFunction,
+) => {
+    try {
+        if (!req.user) {
+            return next(new CustomError('Unauthorized', 401));
+        }
+        const n = req.user.role?.toLowerCase?.();
+        if (n === 'superadmin' || n === 'admin') {
+            return next();
+        }
+        return next(
+            new CustomError(
+                'Forbidden: Only admin or superadmin can perform this action',
+                403,
+            ),
+        );
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const studentRoleOnly = async (
+    req: any,
+    _res: Response,
+    next: NextFunction,
+) => {
+    try {
+        if (!req.user) {
+            return next(new CustomError('Unauthorized', 401));
+        }
+        if (req.user.role?.toLowerCase?.() !== 'student') {
+            return next(
+                new CustomError('Forbidden: Students only', 403),
+            );
+        }
+        next();
+    } catch (error) {
+        next(error);
+    }
+};
+
 // -------------------- COURSE ADMIN OR SUPERADMIN MIDDLEWARE --------------------
 export const courseAdminOrSuperadminOnly = async (
     req: any,

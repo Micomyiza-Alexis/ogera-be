@@ -123,13 +123,18 @@ export const getAllRoutes = async (_req: Request, res: Response) => {
             '/notifications',
             '/roles',
             '/disputes',
+            '/dashboard',
             '/analytics',
             '/transactions',
             '/job-applications',
             '/trust-score',
+            '/trustscore',
             '/profile',
             '/users',
             '/courses',
+            '/payments',
+            '/momo',
+            '/cognitive-tests',
         ];
 
         res.status(StatusCodes.OK).json({

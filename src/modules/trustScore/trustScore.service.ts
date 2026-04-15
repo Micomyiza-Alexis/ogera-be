@@ -1,124 +1,520 @@
 import { CustomError } from '@/utils/custom-error';
 import { StatusCodes } from 'http-status-codes';
 import { DB } from '@/database';
-import { TrustScore, TrustScoreBreakdown } from '@/interfaces/trustScore.interfaces';
+import { Op } from 'sequelize';
+import {
+    TrustScorePayload,
+    TrustLevel,
+    TrustScoreHistoryItem,
+    LeaderboardStudentRow,
+    TrustAdminSummary,
+} from '@/interfaces/trustScore.interfaces';
 
-// Constants for TrustScore calculation
-const EMAIL_VERIFICATION_WEIGHT = 33.33;
-const PHONE_VERIFICATION_WEIGHT = 33.33;
-const ACADEMIC_VERIFICATION_WEIGHT = 33.34;
+const W_I = 0.4;
+const W_E = 0.35;
+const W_C = 0.25;
+const INTELLIGENCE_COGNITIVE_WEIGHT = 0.4;
+const INTELLIGENCE_ACADEMIC_WEIGHT = 0.3;
+const INTELLIGENCE_PROBLEM_SOLVING_WEIGHT = 0.3;
+
+const clamp01 = (n: number): number => {
+    if (Number.isNaN(n) || n < 0) return 0;
+    if (n > 1) return 1;
+    return n;
+};
+
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+const hasDiff = (a: number | null | undefined, b: number): boolean =>
+    a == null || Math.abs(Number(a) - b) > 0.0001;
 
 /**
- * Calculate TrustScore breakdown based on verifications
+ * Cognitive component:
+ * - For repeated attempts of the same test, use only the latest attempt.
+ * - Across different tests, average all latest test scores.
  */
-const calculateTrustScoreBreakdown = (
-    emailVerified: boolean,
-    phoneVerified: boolean,
-    academicVerified: boolean,
-): TrustScoreBreakdown => {
-    const emailScore = emailVerified ? EMAIL_VERIFICATION_WEIGHT : 0;
-    const phoneScore = phoneVerified ? PHONE_VERIFICATION_WEIGHT : 0;
-    const academicScore = academicVerified ? ACADEMIC_VERIFICATION_WEIGHT : 0;
+const computeCognitiveIntelligence = async (user_id: string): Promise<number> => {
+    const rows = await DB.UserTests.findAll({
+        where: { user_id },
+        attributes: [
+            'test_id',
+            'cognitive_test_id',
+            'test_name',
+            'score',
+            'max_score',
+            'taken_at',
+            'created_at',
+            'updated_at',
+        ],
+        order: [
+            ['taken_at', 'DESC'],
+            ['created_at', 'DESC'],
+            ['updated_at', 'DESC'],
+        ],
+    });
+    if (!rows.length) return 0;
 
-    const totalScore = emailScore + phoneScore + academicScore;
+    const latestAttemptPerTest = new Map<string, (typeof rows)[number]>();
+    for (const r of rows) {
+        const cognitiveTestId = r.get('cognitive_test_id');
+        const testName = r.get('test_name');
+        const testId = r.get('test_id');
+        const testKey = String(cognitiveTestId || testName || testId || '');
+        if (!testKey || latestAttemptPerTest.has(testKey)) continue;
+        latestAttemptPerTest.set(testKey, r);
+    }
 
-    return {
-        email_verification_score: emailScore,
-        phone_verification_score: phoneScore,
-        academic_verification_score: academicScore,
-        total_score: Math.round(totalScore * 100) / 100, // Round to 2 decimal places
-    };
+    let sum = 0;
+    let count = 0;
+    for (const r of latestAttemptPerTest.values()) {
+        const max = Number(r.get('max_score'));
+        if (max == null || max <= 0) continue;
+        const score = Number(r.get('score')) || 0;
+        sum += clamp01(score / max);
+        count += 1;
+    }
+    return count ? sum / count : 0;
+};
+
+const extractNumeric = (raw: unknown): number | null => {
+    const text = String(raw ?? '').trim();
+    if (!text) return null;
+    const match = text.match(/-?\d+(\.\d+)?/);
+    if (!match) return null;
+    const value = Number(match[0]);
+    return Number.isFinite(value) ? value : null;
 };
 
 /**
- * Get TrustScore level and description based on score
+ * Academic component from education grades:
+ * - percentage: grade / 100
+ * - cgpa: grade / 10
+ * - gpa: grade / 4
  */
-const getTrustScoreLevel = (
+const computeAcademicIntelligence = async (user_id: string): Promise<number> => {
+    const rows = await DB.UserEducations.findAll({
+        where: { user_id },
+        attributes: ['grade', 'grade_type'],
+    });
+    if (!rows.length) return 0;
+
+    let sum = 0;
+    let count = 0;
+    for (const r of rows) {
+        const grade = extractNumeric(r.get('grade'));
+        if (grade == null) continue;
+        const gradeType = String(r.get('grade_type') || '').toLowerCase();
+        let normalized = 0;
+        if (gradeType === 'percentage') {
+            normalized = grade / 100;
+        } else if (gradeType === 'cgpa') {
+            normalized = grade / 10;
+        } else if (gradeType === 'gpa') {
+            normalized = grade / 4;
+        } else {
+            continue;
+        }
+        sum += clamp01(normalized);
+        count += 1;
+    }
+
+    return count ? sum / count : 0;
+};
+
+const PROBLEM_SOLVING_SKILL_REGEX =
+    /\b(problem[\s-]?solving|analytical|critical thinking|reasoning|logic|troubleshooting|decision making)\b/i;
+const PROFICIENCY_SCORE: Record<string, number> = {
+    beginner: 0.25,
+    intermediate: 0.5,
+    advanced: 0.75,
+    expert: 1,
+};
+
+/**
+ * Problem-solving component from explicit problem-solving related skills.
+ */
+const computeProblemSolvingIntelligence = async (user_id: string): Promise<number> => {
+    const rows = await DB.UserSkills.findAll({
+        where: { user_id },
+        attributes: ['skill_name', 'proficiency_level', 'years_of_experience'],
+    });
+    if (!rows.length) return 0;
+
+    const matched = rows.filter((r) =>
+        PROBLEM_SOLVING_SKILL_REGEX.test(String(r.get('skill_name') || '')),
+    );
+    if (!matched.length) return 0;
+
+    let sum = 0;
+    for (const r of matched) {
+        const proficiency = String(r.get('proficiency_level') || '').toLowerCase();
+        const proficiencyScore = PROFICIENCY_SCORE[proficiency] ?? 0.5;
+        const years = Math.max(0, Number(r.get('years_of_experience')) || 0);
+        const experienceScore = clamp01(years / 5);
+        // Blend proficiency and practical years for a stable normalized score.
+        sum += clamp01(proficiencyScore * 0.7 + experienceScore * 0.3);
+    }
+
+    return sum / matched.length;
+};
+
+/**
+ * Intelligence (I) structure:
+ * - 40% cognitive test performance
+ * - 30% academic record
+ * - 30% problem-solving skill
+ */
+const computeIntelligence = async (user_id: string): Promise<number> => {
+    const [cognitive, academic, problemSolving] = await Promise.all([
+        computeCognitiveIntelligence(user_id),
+        computeAcademicIntelligence(user_id),
+        computeProblemSolvingIntelligence(user_id),
+    ]);
+
+    return clamp01(
+        cognitive * INTELLIGENCE_COGNITIVE_WEIGHT +
+            academic * INTELLIGENCE_ACADEMIC_WEIGHT +
+            problemSolving * INTELLIGENCE_PROBLEM_SOLVING_WEIGHT,
+    );
+};
+
+const EXPERIENCE_CATEGORY_WEIGHT = 0.2;
+const INTERNSHIP_KEYWORD_REGEX = /\bintern(ship)?\b/i;
+
+/**
+ * Experience (E) category caps (20% each):
+ * - Resume uploaded
+ * - At least one internship entry
+ * - At least one project
+ * - At least one accomplishment
+ *
+ * Multiple records in the same category do not increase E beyond that category cap.
+ */
+const computeExperience = async (user_id: string): Promise<number> => {
+    const [user, internshipEmploymentCount, projectCount, accomplishments] = await Promise.all([
+        DB.Users.findOne({
+            where: { user_id },
+            attributes: ['resume_url'],
+        }),
+        DB.UserEmployments.count({
+            where: { user_id, employment_type: 'internship' },
+        }),
+        DB.UserProjects.count({
+            where: { user_id },
+        }),
+        DB.UserAccomplishments.findAll({
+            where: { user_id },
+            attributes: ['title', 'description', 'issuing_organization', 'credential_id'],
+        }),
+    ]);
+
+    let experience = 0;
+    const internshipCertificates = accomplishments.filter((a) => {
+        const title = String(a.get('title') || '');
+        const description = String(a.get('description') || '');
+        const issuingOrg = String(a.get('issuing_organization') || '');
+        const credentialId = String(a.get('credential_id') || '');
+        const searchable = `${title} ${description} ${issuingOrg} ${credentialId}`;
+        return INTERNSHIP_KEYWORD_REGEX.test(searchable);
+    });
+    const internshipCertificateCount = internshipCertificates.length;
+    const nonInternshipAccomplishmentCount = accomplishments.length - internshipCertificateCount;
+    const internshipCount = internshipEmploymentCount + internshipCertificateCount;
+
+    if (user?.resume_url) experience += EXPERIENCE_CATEGORY_WEIGHT;
+    if (internshipCount > 0) experience += EXPERIENCE_CATEGORY_WEIGHT;
+    if (projectCount > 0) experience += EXPERIENCE_CATEGORY_WEIGHT;
+    // Internship certificates count under internship category only, not accomplishment too.
+    if (nonInternshipAccomplishmentCount > 0) {
+        experience += EXPERIENCE_CATEGORY_WEIGHT;
+    }
+
+    return clamp01(experience);
+};
+
+/**
+ * Interaction: AVG(rating) / 5 (ratings clamped to 0–5).
+ */
+const computeInteraction = async (user_id: string): Promise<number> => {
+    const rows = await DB.UserFeedbacks.findAll({
+        where: { user_id },
+        attributes: ['rating'],
+    });
+    if (!rows.length) return 0;
+    let sum = 0;
+    for (const r of rows) {
+        const rating = Math.min(5, Math.max(0, Number(r.get('rating')) || 0));
+        sum += rating;
+    }
+    const avg = sum / rows.length;
+    return clamp01(avg / 5);
+};
+
+const trustScoreFromIEC = (I: number, E: number, C: number): number => {
+    const raw = (W_I * I + W_E * E + W_C * C) * 100;
+    return round2(Math.min(100, Math.max(0, raw)));
+};
+
+export const getTrustScoreLevel = (
     score: number,
-): { level: TrustScore['level']; description: string } => {
+): { level: TrustLevel; description: string } => {
     if (score >= 85) {
         return {
             level: 'Exceptional',
             description:
-                'Demonstrates outstanding verification status with all credentials verified. Trusted for leadership and high-value transactions.',
+                'Outstanding balance of assessment results, portfolio completion, and peer feedback.',
         };
-    } else if (score >= 70) {
+    }
+    if (score >= 70) {
         return {
             level: 'Competent',
             description:
-                'Reliable verification status. Performs well with majority of credentials verified.',
+                'Strong trust profile; continue building projects and collaboration.',
         };
-    } else if (score >= 55) {
+    }
+    if (score >= 55) {
         return {
             level: 'Developing',
             description:
-                'Shows potential with some verifications completed. Requires additional verification for full access.',
+                'Good progress; focus on weaker areas below to move up a tier.',
         };
-    } else if (score >= 40) {
+    }
+    if (score >= 40) {
         return {
             level: 'Emerging',
             description:
-                'Basic verification status. Limited verifications completed. High potential for growth.',
-        };
-    } else {
-        return {
-            level: 'Limited',
-            description:
-                'Insufficient verification status. Please complete email, phone, and academic verifications to improve your TrustScore.',
+                'Foundational trust; complete more projects and gather feedback.',
         };
     }
+    return {
+        level: 'Limited',
+        description:
+            'Limited data yet. Add assessments, projects, and ratings to improve your TrustScore.',
+    };
+};
+
+const buildSuggestions = (I: number, E: number, C: number): string[] => {
+    const out: string[] = [];
+    if (E < 0.5) {
+        out.push(
+            'Upload your resume and add internship, project, and accomplishment records to raise Experience.',
+        );
+    }
+    if (C < 0.5) {
+        out.push(
+            'Increase collaboration and employer feedback (ratings) to raise Interaction.',
+        );
+    }
+    if (I < 0.5) {
+        out.push(
+            'Take skill assessments (user_tests) to demonstrate Intelligence.',
+        );
+    }
+    if (!out.length) {
+        out.push('Keep maintaining your profile, projects, and collaboration.');
+    }
+    return out;
+};
+
+const toPayload = (
+    user_id: string,
+    I: number,
+    E: number,
+    C: number,
+    trust: number,
+    level: TrustLevel,
+    description: string,
+    source: 'cached' | 'computed',
+): TrustScorePayload => ({
+    user_id,
+    trust_score: trust,
+    intelligence_score: round2(I),
+    experience_score: round2(E),
+    interaction_score: round2(C),
+    // Weighted IEC contribution breakdown on a 0-100 trust scale.
+    intelligence_percent: round2(I * 100),
+    experience_percent: round2(E * 100),
+    interaction_percent: round2(C * 100),
+    level,
+    description,
+    suggestions: buildSuggestions(I, E, C),
+    source,
+});
+
+/**
+ * Recompute I/E/C from source tables (no DB write).
+ */
+export const computeTrustComponents = async (
+    user_id: string,
+): Promise<{ I: number; E: number; C: number; trust_score: number; level: TrustLevel; description: string }> => {
+    const I = await computeIntelligence(user_id);
+    const E = await computeExperience(user_id);
+    const C = await computeInteraction(user_id);
+    const trust_score = trustScoreFromIEC(I, E, C);
+    const { level, description } = getTrustScoreLevel(trust_score);
+    return { I, E, C, trust_score, level, description };
 };
 
 /**
- * Get TrustScore for a user
+ * GET trust score: use cached columns on `users` when present; otherwise live compute (not saved).
  */
-export const getTrustScoreService = async (user_id: string): Promise<TrustScore> => {
-    // Get user with all verification fields
-    const user = await DB.Users.findOne({
-        where: { user_id },
-    });
+export const getTrustScoreService = async (
+    user_id: string,
+): Promise<TrustScorePayload> => {
+    const user = await DB.Users.findOne({ where: { user_id } });
     if (!user) {
         throw new CustomError('User not found', StatusCodes.NOT_FOUND);
     }
 
-    // Check academic verification status
-    const academicVerification = await DB.AcademicVerifications.findOne({
-        where: { user_id },
-    });
+    const { I, E, C, trust_score, level, description } =
+        await computeTrustComponents(user_id);
 
-    const emailVerified = user.email_verified || false;
-    const phoneVerified = user.phone_verified || false;
-    const academicVerified =
-        academicVerification?.status === 'accepted' ? true : false;
+    // Keep cache in sync so UI does not show stale TrustScore after profile changes.
+    if (
+        hasDiff(user.intelligence_score, round2(I)) ||
+        hasDiff(user.experience_score, round2(E)) ||
+        hasDiff(user.interaction_score, round2(C)) ||
+        hasDiff(user.trust_score, trust_score) ||
+        (user.trust_level as TrustLevel | null) !== level
+    ) {
+        await user.update({
+            intelligence_score: round2(I),
+            experience_score: round2(E),
+            interaction_score: round2(C),
+            trust_score,
+            trust_level: level,
+        });
+    }
 
-    // Calculate TrustScore breakdown
-    const breakdown = calculateTrustScoreBreakdown(
-        emailVerified,
-        phoneVerified,
-        academicVerified,
-    );
-
-    // Get TrustScore level
-    const { level, description } = getTrustScoreLevel(breakdown.total_score);
-
-    return {
-        user_id,
-        trust_score: breakdown.total_score,
-        email_verified: emailVerified,
-        phone_verified: phoneVerified,
-        academic_verified: academicVerified,
-        breakdown,
-        level,
-        description,
-    };
+    return toPayload(user_id, I, E, C, trust_score, level, description, 'computed');
 };
 
-/**
- * Get TrustScore for current authenticated user
- */
 export const getMyTrustScoreService = async (
     user_id: string,
-): Promise<TrustScore> => {
-    return getTrustScoreService(user_id);
+): Promise<TrustScorePayload> => getTrustScoreService(user_id);
+
+/**
+ * POST/GET calculate: recompute, update users, append history.
+ */
+export const calculateTrustScoreService = async (
+    user_id: string,
+): Promise<TrustScorePayload> => {
+    const user = await DB.Users.findOne({ where: { user_id } });
+    if (!user) {
+        throw new CustomError('User not found', StatusCodes.NOT_FOUND);
+    }
+
+    const { I, E, C, trust_score, level, description } =
+        await computeTrustComponents(user_id);
+
+    await user.update({
+        intelligence_score: round2(I),
+        experience_score: round2(E),
+        interaction_score: round2(C),
+        trust_score,
+        trust_level: level,
+    });
+
+    await DB.TrustscoreHistory.create({
+        user_id,
+        intelligence_score: round2(I),
+        experience_score: round2(E),
+        interaction_score: round2(C),
+        trust_score,
+        trust_level: level,
+        computed_at: new Date(),
+    });
+
+    return toPayload(user_id, I, E, C, trust_score, level, description, 'cached');
 };
 
+export const getTrustScoreHistoryService = async (
+    user_id: string,
+    limit = 20,
+): Promise<TrustScoreHistoryItem[]> => {
+    const rows = await DB.TrustscoreHistory.findAll({
+        where: { user_id },
+        order: [['computed_at', 'DESC']],
+        limit: Math.min(Math.max(limit, 1), 100),
+    });
+    return rows.map((r) => ({
+        history_id: r.history_id,
+        user_id: r.user_id,
+        intelligence_score: r.intelligence_score,
+        experience_score: r.experience_score,
+        interaction_score: r.interaction_score,
+        trust_score: r.trust_score,
+        trust_level: r.trust_level,
+        computed_at: r.computed_at,
+    }));
+};
+
+export const getStudentLeaderboardService = async (
+    limit = 20,
+): Promise<LeaderboardStudentRow[]> => {
+    const take = Math.min(Math.max(limit, 1), 100);
+    const rows = await DB.Users.findAll({
+        where: {
+            role_type: 'student',
+            trust_score: { [Op.ne]: null },
+        },
+        attributes: ['user_id', 'full_name', 'email', 'trust_score', 'trust_level'],
+        order: [['trust_score', 'DESC']],
+        limit: take,
+    });
+    return rows.map((u) => ({
+        user_id: u.user_id,
+        full_name: u.full_name,
+        email: u.email,
+        trust_score: u.trust_score ?? null,
+        trust_level: u.trust_level ?? null,
+    }));
+};
+
+export const getAdminTrustSummaryService = async (): Promise<TrustAdminSummary> => {
+    const students = await DB.Users.findAll({
+        where: { role_type: 'student' },
+        attributes: ['user_id', 'full_name', 'email', 'trust_score', 'trust_level'],
+    });
+
+    const withScore = students.filter(
+        (s) => s.trust_score != null && !Number.isNaN(Number(s.trust_score)),
+    );
+    const scores = withScore.map((s) => Number(s.trust_score));
+    const avg =
+        scores.length > 0
+            ? round2(scores.reduce((a, b) => a + b, 0) / scores.length)
+            : null;
+
+    const top_users = [...withScore]
+        .sort((a, b) => Number(b.trust_score) - Number(a.trust_score))
+        .slice(0, 10)
+        .map((u) => ({
+            user_id: u.user_id,
+            full_name: u.full_name,
+            email: u.email,
+            trust_score: u.trust_score ?? null,
+            trust_level: u.trust_level ?? null,
+        }));
+
+    const buckets = [
+        { label: 'Limited (<40)', min: 0, max: 39.99 },
+        { label: 'Emerging (40–54)', min: 40, max: 54.99 },
+        { label: 'Developing (55–69)', min: 55, max: 69.99 },
+        { label: 'Competent (70–84)', min: 70, max: 84.99 },
+        { label: 'Exceptional (85+)', min: 85, max: 100 },
+    ];
+
+    const distribution = buckets.map((b) => ({
+        label: b.label,
+        min: b.min,
+        max: b.max,
+        count: scores.filter((s) => s >= b.min && s <= b.max).length,
+    }));
+
+    return {
+        average_trust_score: avg,
+        students_with_score: withScore.length,
+        top_users,
+        distribution,
+    };
+};

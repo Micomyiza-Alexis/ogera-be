@@ -14,6 +14,7 @@ import pesapalRouter from '@/modules/pesapal/pesapal.routes';
 import momoRouter from '@/modules/momo/momo.routes';
 import dashboardRouter from '@/modules/dashboard/dashboard.routes';
 import disputeRouter from '@/modules/dispute/dispute.routes';
+import cognitiveTestRouter from '@/modules/cognitiveTest/cognitiveTest.routes';
 import express from 'express';
 
 const router = express.Router();
@@ -27,6 +28,7 @@ router.use('/', jobApplicationRouter);
 router.use('/academic-verifications', academicVerificationRouter);
 router.use('/notifications', notificationRouter);
 router.use('/trust-score', trustScoreRouter);
+router.use('/trustscore', trustScoreRouter);
 router.use('/profile', profileRouter);
 router.use('/users', userRouter);
 router.use('/courses', courseRouter);
@@ -34,5 +36,6 @@ router.use('/payments', pesapalRouter);
 router.use('/momo', momoRouter);
 router.use('/dashboard', dashboardRouter);
 router.use('/disputes', disputeRouter);
+router.use('/cognitive-tests', cognitiveTestRouter);
 
 export default router;
