@@ -112,6 +112,12 @@ export const applyForJobService = async (
     if (!job) {
         throw new CustomError('Job not found', StatusCodes.NOT_FOUND);
     }
+    if (job.funding_status !== 'Funded' && job.funding_status !== 'Paid') {
+        throw new CustomError(
+            'This job is not funded yet, so applications are currently closed.',
+            StatusCodes.BAD_REQUEST,
+        );
+    }
 
     // Validate required questions are answered
     if (job.questions && job.questions.length > 0) {
