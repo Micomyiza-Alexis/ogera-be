@@ -29,6 +29,7 @@ import {
     uploadProfileImageService,
     getProfileCompletionService,
     updateProfileImageUrlService,
+    getOtherUserFullProfileService,
 } from './profile.service';
 
 const response = new ResponseFormat();
@@ -446,11 +447,20 @@ export const getFullProfile = async (req: Request, res: Response): Promise<void>
     }
 };
 
+// ====================== PROFILE IMAGE & COMPLETION ======================
 export const uploadProfileImage = async (req: Request, res: Response): Promise<void> => {
     try {
         const user_id = req.user?.user_id;
-        if (!user_id) { response.errorResponse(res, StatusCodes.UNAUTHORIZED, false, 'User not authenticated'); return; }
-        if (!req.file) { response.errorResponse(res, StatusCodes.BAD_REQUEST, false, 'No image file provided'); return; }
+        if (!user_id) {
+            response.errorResponse(res, StatusCodes.UNAUTHORIZED, false, 'User not authenticated');
+            return;
+        }
+
+        if (!req.file) {
+            response.errorResponse(res, StatusCodes.BAD_REQUEST, false, 'No image file provided');
+            return;
+        }
+
         const result = await uploadProfileImageService(user_id, req.file);
         response.response(res, true, StatusCodes.OK, result, 'Profile image uploaded successfully');
     } catch (error: any) {
@@ -461,7 +471,11 @@ export const uploadProfileImage = async (req: Request, res: Response): Promise<v
 export const getProfileCompletion = async (req: Request, res: Response): Promise<void> => {
     try {
         const user_id = req.user?.user_id;
-        if (!user_id) { response.errorResponse(res, StatusCodes.UNAUTHORIZED, false, 'User not authenticated'); return; }
+        if (!user_id) {
+            response.errorResponse(res, StatusCodes.UNAUTHORIZED, false, 'User not authenticated');
+            return;
+        }
+
         const completion = await getProfileCompletionService(user_id);
         response.response(res, true, StatusCodes.OK, completion, 'Profile completion retrieved successfully');
     } catch (error: any) {
@@ -472,11 +486,39 @@ export const getProfileCompletion = async (req: Request, res: Response): Promise
 export const updateProfileImageUrl = async (req: Request, res: Response): Promise<void> => {
     try {
         const user_id = req.user?.user_id;
-        if (!user_id) { response.errorResponse(res, StatusCodes.UNAUTHORIZED, false, 'User not authenticated'); return; }
+        if (!user_id) {
+            response.errorResponse(res, StatusCodes.UNAUTHORIZED, false, 'User not authenticated');
+            return;
+        }
+
         const { profile_image_url } = req.body;
-        if (!profile_image_url) { response.errorResponse(res, StatusCodes.BAD_REQUEST, false, 'profile_image_url is required'); return; }
+        if (!profile_image_url) {
+            response.errorResponse(res, StatusCodes.BAD_REQUEST, false, 'Profile image URL is required');
+            return;
+        }
+
         const result = await updateProfileImageUrlService(user_id, profile_image_url);
-        response.response(res, true, StatusCodes.OK, result, 'Profile image updated successfully');
+        response.response(res, true, StatusCodes.OK, result, 'Profile image URL updated successfully');
+    } catch (error: any) {
+        response.errorResponse(res, error.status || StatusCodes.INTERNAL_SERVER_ERROR, false, error.message);
+    }
+};
+
+// ====================== OTHER USER PROFILE ======================
+export const getOtherUserFullProfile = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const userId = req.params.userId as string;
+        if (!userId) {
+            response.errorResponse(res, StatusCodes.BAD_REQUEST, false, 'User ID is required');
+            return;
+        }
+
+        const fullProfile = await getOtherUserFullProfileService(userId);
+        if (!fullProfile) {
+            response.errorResponse(res, StatusCodes.NOT_FOUND, false, 'User profile not found');
+            return;
+        }
+        response.response(res, true, StatusCodes.OK, fullProfile, 'User profile retrieved successfully');
     } catch (error: any) {
         response.errorResponse(res, error.status || StatusCodes.INTERNAL_SERVER_ERROR, false, error.message);
     }

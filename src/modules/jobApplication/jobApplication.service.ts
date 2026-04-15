@@ -12,6 +12,7 @@ import {
     createApplicationStatusNotification,
 } from '@/modules/notification/notification.service';
 import * as path from 'path';
+import * as messagesRepo from '@/modules/messages/messages.repo';
 
 /**
  * Convert resume URL to API endpoint format if it's a local file path
@@ -580,6 +581,26 @@ export const updateApplicationStatusService = async (
         } catch (error) {
             console.error('Failed to create notification for student:', error);
             // Don't fail the request if notification creation fails
+        }
+
+        // CRITICAL: Create conversation automatically when application is ACCEPTED
+        if (status === 'Accepted') {
+            try {
+                // Use data already loaded in updatedApplication to create conversation
+                if (updatedApplication?.job?.employer_id && updatedApplication?.student_id && updatedApplication?.job_id) {
+                    const conversation = await messagesRepo.createOrGetConversationRepo(
+                        updatedApplication.job.employer_id,
+                        updatedApplication.student_id,
+                        updatedApplication.job_id
+                    );
+                    console.log(`✓ Conversation ${conversation.conversation_id} created/retrieved for approved application ${application_id}`);
+                } else {
+                    console.warn(`⚠️ Missing required data for conversation creation: employer_id=${updatedApplication?.job?.employer_id}, student_id=${updatedApplication?.student_id}, job_id=${updatedApplication?.job_id}`);
+                }
+            } catch (error) {
+                console.error('Failed to create conversation for approved application:', error);
+                // Don't fail the request if conversation creation fails
+            }
         }
     }
 
