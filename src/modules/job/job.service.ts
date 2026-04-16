@@ -127,13 +127,39 @@ export const createJobService = async (
         return createdJob;
 };
 
-export const getAllJobsService = async (status?: string) => {
-    return await repo.findAllJobs(status);
+export const getAllJobsService = async (
+    status?: string,
+    funded?: string,
+    user?: { user_id: string; role: string },
+) => {
+    const normalizedRole = user?.role ? String(user.role).toLowerCase().trim() : '';
+    const fundedFilter =
+        funded === 'true' ? true : funded === 'false' ? false : undefined;
+
+    // Students should only ever see funded jobs.
+    if (normalizedRole === 'student') {
+        return await repo.findAllJobs(status, true);
+    }
+
+    // Employers default to funded-only (My Jobs behavior).
+    // They can explicitly request unfunded-only with funded=false.
+    if (normalizedRole === 'employer') {
+        return await repo.findAllJobs(status, fundedFilter ?? true);
+    }
+
+    return await repo.findAllJobs(status, fundedFilter);
 };
 
 export const getJobsByStatusService = async (
     status: 'Pending' | 'Active' | 'Inactive' | 'Completed',
+    user?: { user_id: string; role: string },
 ) => {
+    const normalizedRole = user?.role ? String(user.role).toLowerCase().trim() : '';
+
+    if (normalizedRole === 'student' || normalizedRole === 'employer') {
+        return await repo.findAllJobs(status, true);
+    }
+
     return await repo.findAllJobs(status);
 };
 

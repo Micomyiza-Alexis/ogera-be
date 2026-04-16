@@ -61,7 +61,8 @@ export const getAllJobs = async (
     try {
         // Check if status query parameter is provided
         const status = req.query.status as string | undefined;
-        const jobs = await getAllJobsService(status);
+        const funded = req.query.funded as string | undefined;
+        const jobs = await getAllJobsService(status, funded, req.user);
         response.response(
             res,
             true,
@@ -86,7 +87,7 @@ export const getActiveJobs = async (
     next: NextFunction,
 ) => {
     try {
-        const jobs = await getJobsByStatusService('Active');
+        const jobs = await getJobsByStatusService('Active', req.user);
         response.response(
             res,
             true,
@@ -111,7 +112,7 @@ export const getPendingJobs = async (
     next: NextFunction,
 ) => {
     try {
-        const jobs = await getJobsByStatusService('Pending');
+        const jobs = await getJobsByStatusService('Pending', req.user);
         response.response(
             res,
             true,
@@ -136,7 +137,7 @@ export const getCompletedJobs = async (
     next: NextFunction,
 ) => {
     try {
-        const jobs = await getJobsByStatusService('Completed');
+        const jobs = await getJobsByStatusService('Completed', req.user);
         response.response(
             res,
             true,
@@ -163,6 +164,17 @@ export const getJobById = async (
         const job = await getJobByIdService(req.params.id as string);
         const rawJob = job && typeof job.get === 'function' ? job.get({ plain: true }) : job;
         const jobData = rawJob as unknown as Record<string, unknown>;
+        const userRole = req.user?.role ? String(req.user.role).toLowerCase().trim() : '';
+        const fundingStatus = String(jobData?.funding_status || '');
+        if (userRole === 'student' && fundingStatus !== 'Funded' && fundingStatus !== 'Paid') {
+            response.errorResponse(
+                res,
+                StatusCodes.FORBIDDEN,
+                false,
+                'This job is not funded yet and is not visible to students.',
+            );
+            return;
+        }
         if (req.user && jobData && jobData.funding_status === 'Paid') {
             const application = await DB.JobApplications.findOne({
                 where: { job_id: req.params.id, status: 'Accepted' },
