@@ -718,13 +718,13 @@ export const uploadResumeService = async (
     };
 };
 
-// Download resume file (employer/superadmin only)
+// Download resume file
 export const downloadResumeService = async (
     filePath: string,
     user_id: string,
     userRole: string,
 ) => {
-    // Check if user has permission (employer or superadmin)
+    // Check if user has permission (student, employer, or superadmin)
     const user = await DB.Users.findOne({
         where: { user_id },
         include: [
@@ -743,65 +743,43 @@ export const downloadResumeService = async (
     const roleType = user.role.roleType;
     const roleName = user.role.roleName.toLowerCase();
 
-    // Only employer and superadmin can download resumes
+    // Only student, employer and superadmin can download resumes
     if (
+        roleType !== 'student' &&
         roleType !== 'employer' &&
         roleType !== 'superAdmin' &&
         roleName !== 'superadmin'
     ) {
         throw new CustomError(
-            'Only employer and superadmin users can download resumes',
+            'Only student, employer and superadmin users can download resumes',
             StatusCodes.FORBIDDEN,
         );
     }
 
     // Decode the file path in case it's URL encoded
     const decodedPath = decodeURIComponent(filePath);
+    const matchesResumePath = (resumePath?: string | null) => {
+        if (!resumePath) return false;
 
-    // Find application by resume path - the resume_url in DB contains the actual file path
-    // We need to match against the original stored path, which might be in various formats
-    const applications = await DB.JobApplications.findAll({
-        where: {
-            resume_url: { [Op.ne]: null as any },
-        },
-        include: [
-            {
-                model: DB.Jobs,
-                as: 'job',
-                attributes: ['job_id', 'employer_id'],
-            },
-        ],
-    });
-
-    // Find the application that matches the file path
-    let application = applications.find(app => {
-        if (!app.resume_url) return false;
-
-        // Check various path formats
-        const resumePath = app.resume_url;
-
-        // Direct match
         if (resumePath === decodedPath || resumePath === filePath) return true;
 
-        // Check if the decoded path is contained in resume_url or vice versa
         if (
             resumePath.includes(decodedPath) ||
             decodedPath.includes(resumePath)
         ) {
-            // Extract filename from both paths for comparison
             const resumeFileName = resumePath.split(/[\/\\]/).pop();
             const requestFileName = decodedPath.split(/[\/\\]/).pop();
             if (resumeFileName === requestFileName) return true;
         }
 
-        // Handle normalized URL format: /api/resumes/download?path=...
         if (resumePath.includes('/api/resumes/download')) {
             try {
                 const urlMatch = resumePath.match(/path=([^&]+)/);
                 if (urlMatch) {
                     const urlPath = decodeURIComponent(urlMatch[1]);
-                    if (urlPath === decodedPath || urlPath === filePath)
+                    if (urlPath === decodedPath || urlPath === filePath) {
                         return true;
+                    }
                 }
             } catch (e) {
                 // Ignore URL parsing errors
@@ -809,24 +787,74 @@ export const downloadResumeService = async (
         }
 
         return false;
-    });
+    };
+    let sourceResumePath: string | null = null;
 
-    if (!application) {
+    if (roleType === 'student') {
+        // Student can download only files that belong to their own profile
+        // (resume_url or accomplishment credential_url values).
+        const ownResumePath = (user as any).resume_url as string | null;
+        const ownAccomplishments = await DB.UserAccomplishments.findAll({
+            where: { user_id },
+            attributes: ['credential_url'],
+        });
+        const ownCredentialPaths = ownAccomplishments
+            .map(item => item.credential_url)
+            .filter(Boolean) as string[];
+
+        const isAllowedStudentFile =
+            matchesResumePath(ownResumePath) ||
+            ownCredentialPaths.some(path => matchesResumePath(path));
+
+        if (!isAllowedStudentFile) {
+            throw new CustomError('Resume not found', StatusCodes.NOT_FOUND);
+        }
+        sourceResumePath =
+            ownCredentialPaths.find(path => matchesResumePath(path)) ||
+            ownResumePath;
+    } else {
+        // Employer/superadmin: find resume in job applications
+        const applications = await DB.JobApplications.findAll({
+            where: {
+                resume_url: { [Op.ne]: null as any },
+            },
+            include: [
+                {
+                    model: DB.Jobs,
+                    as: 'job',
+                    attributes: ['job_id', 'employer_id'],
+                },
+            ],
+        });
+
+        // Find the application that matches the file path
+        const application = applications.find(app =>
+            matchesResumePath(app.resume_url),
+        );
+
+        if (!application) {
+            throw new CustomError('Resume not found', StatusCodes.NOT_FOUND);
+        }
+
+        // If user is employer, check if they own the job
+        if (roleType === 'employer') {
+            if (!application.job || application.job.employer_id !== user_id) {
+                throw new CustomError(
+                    'You can only download resumes for your own job applications',
+                    StatusCodes.FORBIDDEN,
+                );
+            }
+        }
+
+        sourceResumePath = application.resume_url!;
+    }
+
+    if (!sourceResumePath) {
         throw new CustomError('Resume not found', StatusCodes.NOT_FOUND);
     }
 
-    // If user is employer, check if they own the job
-    if (roleType === 'employer') {
-        if (!application.job || application.job.employer_id !== user_id) {
-            throw new CustomError(
-                'You can only download resumes for your own job applications',
-                StatusCodes.FORBIDDEN,
-            );
-        }
-    }
-
-    // Get the actual file path from the application's resume_url
-    let actualFilePath = application.resume_url!;
+    // Get the actual file path from the selected resume source
+    let actualFilePath: string = sourceResumePath;
 
     // If it's a normalized API URL, extract the path
     if (actualFilePath.includes('/api/resumes/download')) {

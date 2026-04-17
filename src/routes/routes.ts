@@ -15,6 +15,9 @@ import pesapalRouter from '@/modules/pesapal/pesapal.routes';
 import momoRouter from '@/modules/momo/momo.routes';
 import dashboardRouter from '@/modules/dashboard/dashboard.routes';
 import disputeRouter from '@/modules/dispute/dispute.routes';
+import cognitiveTestRouter from '@/modules/cognitiveTest/cognitiveTest.routes';
+import problemMetricRouter from '@/modules/problemMetric/problemMetric.routes';
+import academicRecordRouter from '@/modules/academicRecord/academicRecord.routes';
 
 import contactRouter from '@/modules/contact/contact.routes';
 import interviewRouter from '@/modules/interview/interview.routes';
@@ -36,6 +39,7 @@ router.use('/', jobApplicationRouter);
 router.use('/academic-verifications', academicVerificationRouter);
 router.use('/notifications', notificationRouter);
 router.use('/trust-score', trustScoreRouter);
+router.use('/trustscore', trustScoreRouter);
 router.use('/profile', profileRouter);
 router.use('/users', userRouter);
 router.use('/courses', courseRouter);
@@ -43,6 +47,9 @@ router.use('/payments', pesapalRouter);
 router.use('/momo', momoRouter);
 router.use('/dashboard', dashboardRouter);
 router.use('/disputes', disputeRouter);
+router.use('/cognitive-tests', cognitiveTestRouter);
+router.use('/problem-metrics', problemMetricRouter);
+router.use('/academic-records', academicRecordRouter);
 
 router.use('/contact', contactRouter);
 router.use('/interviews', interviewRouter);

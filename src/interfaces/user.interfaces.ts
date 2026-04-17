@@ -40,6 +40,13 @@ export interface User {
     /** SRS: Balance from employer payments; used for courses/platform services. */
     balance?: number | null;
 
+    /** TrustScore (I/E/C model): normalized 0–1 components and 0–100 aggregate */
+    intelligence_score?: number | null;
+    experience_score?: number | null;
+    interaction_score?: number | null;
+    trust_score?: number | null;
+    trust_level?: string | null;
+
     created_at: Date;
     updated_at: Date;
 }

@@ -26,6 +26,7 @@ import {
 } from '@/middlewares/jwt.service';
 import { RoleType } from '@/interfaces/role.interfaces';
 import { decryptSecret, encryptSecret } from '@/utils/2fa.encryption';
+import { calculateTrustScoreService } from '@/modules/trustScore/trustScore.service';
 import { parseDeviceType } from '@/modules/session/session.service';
 import sessionRepo from '@/modules/session/session.repo';
 import { Request } from 'express';
@@ -35,6 +36,16 @@ interface ResetTokenPayload extends JwtPayload {
 }
 
 type SafeUser = Partial<User> & { user_id: string; email: string };
+
+const refreshTrustScoreAfterAuthProfileChange = async (user_id: string): Promise<void> => {
+    try {
+        await calculateTrustScoreService(user_id);
+    } catch (err: any) {
+        console.warn(
+            `TrustScore refresh after auth profile change failed for ${user_id}: ${err?.message || err}`,
+        );
+    }
+};
 
 const sanitizeUser = (user: any): SafeUser => {
     const u = typeof user?.toJSON === 'function' ? user.toJSON() : { ...user };
@@ -107,7 +118,9 @@ const getVerificationFrontendUrl = (frontendOrigin?: string): string => {
 
 // Helper function to map roleName to roleType
 const getRoleTypeFromRoleName = (roleName: string): RoleType => {
-    switch (roleName) {
+    const normalizedRoleName = roleName.trim().toLowerCase();
+
+    switch (normalizedRoleName) {
         case 'student':
             return 'student';
         case 'employer':
@@ -118,6 +131,10 @@ const getRoleTypeFromRoleName = (roleName: string): RoleType => {
         case 'subadmin':
             return 'admin';
         default:
+            // Any custom role containing "admin" should be treated as admin.
+            if (normalizedRoleName.includes('admin')) {
+                return 'admin';
+            }
             return 'student'; // Default fallback
     }
 };
@@ -1291,6 +1308,9 @@ export const updateProfileService = async (
 
     // Update the user
     await repo.updateUser(user_id, updateData);
+    if (data.resume_url !== undefined) {
+        await refreshTrustScoreAfterAuthProfileChange(user_id);
+    }
 
     // Return updated profile
     const updatedUser = await repo.findUserProfileById(user_id);
