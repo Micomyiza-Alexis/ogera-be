@@ -75,45 +75,23 @@ const computeCognitiveIntelligence = async (user_id: string): Promise<number> =>
     return count ? sum / count : 0;
 };
 
-const extractNumeric = (raw: unknown): number | null => {
-    const text = String(raw ?? '').trim();
-    if (!text) return null;
-    const match = text.match(/-?\d+(\.\d+)?/);
-    if (!match) return null;
-    const value = Number(match[0]);
-    return Number.isFinite(value) ? value : null;
-};
-
 /**
- * Academic component from education grades:
- * - percentage: grade / 100
- * - cgpa: grade / 10
- * - gpa: grade / 4
+ * Academic component from dedicated academic_records table.
+ * If multiple records exist, use average percentage.
  */
 const computeAcademicIntelligence = async (user_id: string): Promise<number> => {
-    const rows = await DB.UserEducations.findAll({
+    const rows = await DB.AcademicRecords.findAll({
         where: { user_id },
-        attributes: ['grade', 'grade_type'],
+        attributes: ['percentage'],
     });
     if (!rows.length) return 0;
 
     let sum = 0;
     let count = 0;
     for (const r of rows) {
-        const grade = extractNumeric(r.get('grade'));
-        if (grade == null) continue;
-        const gradeType = String(r.get('grade_type') || '').toLowerCase();
-        let normalized = 0;
-        if (gradeType === 'percentage') {
-            normalized = grade / 100;
-        } else if (gradeType === 'cgpa') {
-            normalized = grade / 10;
-        } else if (gradeType === 'gpa') {
-            normalized = grade / 4;
-        } else {
-            continue;
-        }
-        sum += clamp01(normalized);
+        const percentage = Number(r.get('percentage'));
+        if (!Number.isFinite(percentage)) continue;
+        sum += clamp01(percentage / 100);
         count += 1;
     }
 
@@ -158,27 +136,62 @@ const computeProblemSolvingIntelligence = async (user_id: string): Promise<numbe
 };
 
 /**
+ * Problem metrics component:
+ * - Every puzzle attempt counts.
+ * - Average all attempt percentages for the final problem-metrics contribution.
+ */
+const computeProblemMetricIntelligence = async (user_id: string): Promise<number> => {
+    const rows = await DB.UserTests.findAll({
+        where: {
+            user_id,
+            problem_metric_id: { [Op.ne]: null },
+        },
+        attributes: ['score', 'max_score'],
+    });
+    if (!rows.length) return 0;
+
+    let sum = 0;
+    let count = 0;
+    for (const r of rows) {
+        const max = Number(r.get('max_score'));
+        if (max == null || max <= 0) continue;
+        const score = Number(r.get('score')) || 0;
+        sum += clamp01(score / max);
+        count += 1;
+    }
+
+    return count ? sum / count : 0;
+};
+
+/**
  * Intelligence (I) structure:
  * - 40% cognitive test performance
  * - 30% academic record
- * - 30% problem-solving skill
+ * - 30% problem metrics puzzle performance
  */
 const computeIntelligence = async (user_id: string): Promise<number> => {
-    const [cognitive, academic, problemSolving] = await Promise.all([
+    const [cognitive, academic, problemMetrics] = await Promise.all([
         computeCognitiveIntelligence(user_id),
         computeAcademicIntelligence(user_id),
-        computeProblemSolvingIntelligence(user_id),
+        computeProblemMetricIntelligence(user_id),
     ]);
 
     return clamp01(
         cognitive * INTELLIGENCE_COGNITIVE_WEIGHT +
             academic * INTELLIGENCE_ACADEMIC_WEIGHT +
-            problemSolving * INTELLIGENCE_PROBLEM_SOLVING_WEIGHT,
+            problemMetrics * INTELLIGENCE_PROBLEM_SOLVING_WEIGHT,
     );
 };
 
 const EXPERIENCE_CATEGORY_WEIGHT = 0.2;
 const INTERNSHIP_KEYWORD_REGEX = /\bintern(ship)?\b/i;
+const getExperienceYearsBoost = (years: number): number => {
+    if (years > 4) return 0.2;
+    if (years >= 3) return 0.15;
+    if (years >= 2) return 0.1;
+    if (years >= 1) return 0.05;
+    return 0;
+};
 
 /**
  * Experience (E) category caps (20% each):
@@ -190,10 +203,13 @@ const INTERNSHIP_KEYWORD_REGEX = /\bintern(ship)?\b/i;
  * Multiple records in the same category do not increase E beyond that category cap.
  */
 const computeExperience = async (user_id: string): Promise<number> => {
-    const [user, internshipEmploymentCount, projectCount, accomplishments] = await Promise.all([
+    const [user, extendedProfile, internshipEmploymentCount, projectCount, accomplishments] = await Promise.all([
         DB.Users.findOne({
             where: { user_id },
             attributes: ['resume_url'],
+        }),
+        DB.UserExtendedProfiles.findByPk(user_id, {
+            attributes: ['total_experience_years'],
         }),
         DB.UserEmployments.count({
             where: { user_id, employment_type: 'internship' },
@@ -227,6 +243,9 @@ const computeExperience = async (user_id: string): Promise<number> => {
     if (nonInternshipAccomplishmentCount > 0) {
         experience += EXPERIENCE_CATEGORY_WEIGHT;
     }
+    experience += getExperienceYearsBoost(
+        Math.max(0, Number(extendedProfile?.get('total_experience_years')) || 0),
+    );
 
     return clamp01(experience);
 };

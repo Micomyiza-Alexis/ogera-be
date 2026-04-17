@@ -135,6 +135,7 @@ export const getAllRoutes = async (_req: Request, res: Response) => {
             '/payments',
             '/momo',
             '/cognitive-tests',
+            '/problem-metrics',
         ];
 
         res.status(StatusCodes.OK).json({

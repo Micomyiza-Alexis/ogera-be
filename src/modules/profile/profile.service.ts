@@ -255,6 +255,7 @@ export const getExtendedProfileService = async (user_id: string) => {
 
 export const updateExtendedProfileService = async (user_id: string, data: UpdateExtendedProfileRequest) => {
     const extendedProfile = await repo.createOrUpdateExtendedProfile(user_id, data);
+    await refreshTrustScoreAfterProfileChange(user_id);
     return extendedProfile;
 };
 

@@ -5,6 +5,7 @@ export interface UserTestAttributes {
     test_id: string;
     user_id: string;
     cognitive_test_id?: string | null;
+    problem_metric_id?: string | null;
     test_name?: string | null;
     score: number;
     max_score: number;
@@ -15,7 +16,7 @@ export interface UserTestAttributes {
 
 export type UserTestCreationAttributes = Optional<
     UserTestAttributes,
-    'test_id' | 'cognitive_test_id' | 'test_name' | 'taken_at' | 'created_at' | 'updated_at'
+    'test_id' | 'cognitive_test_id' | 'problem_metric_id' | 'test_name' | 'taken_at' | 'created_at' | 'updated_at'
 >;
 
 export class UserTestModel
@@ -25,6 +26,7 @@ export class UserTestModel
     public test_id!: string;
     public user_id!: string;
     public cognitive_test_id?: string | null;
+    public problem_metric_id?: string | null;
     public test_name?: string | null;
     public score!: number;
     public max_score!: number;
@@ -53,6 +55,13 @@ export default function (sequelize: Sequelize): typeof UserTestModel {
                 type: DataTypes.UUID,
                 allowNull: true,
                 references: { model: 'cognitive_tests', key: 'cognitive_test_id' },
+                onUpdate: 'CASCADE',
+                onDelete: 'SET NULL',
+            },
+            problem_metric_id: {
+                type: DataTypes.UUID,
+                allowNull: true,
+                references: { model: 'problem_metrics', key: 'problem_metric_id' },
                 onUpdate: 'CASCADE',
                 onDelete: 'SET NULL',
             },

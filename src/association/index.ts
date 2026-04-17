@@ -23,8 +23,11 @@ import { DisputeTimelineModel } from '@/database/models/disputeTimeline.model';
 import { UserTestModel } from '@/database/models/userTest.model';
 import { CognitiveTestModel } from '@/database/models/cognitiveTest.model';
 import { CognitiveQuestionModel } from '@/database/models/cognitiveQuestion.model';
+import { ProblemMetricModel } from '@/database/models/problemMetric.model';
+import { ProblemPuzzleQuestionModel } from '@/database/models/problemPuzzleQuestion.model';
 import { UserFeedbackModel } from '@/database/models/userFeedback.model';
 import { TrustscoreHistoryModel } from '@/database/models/trustscoreHistory.model';
+import { AcademicRecordModel } from '@/database/models/academicRecord.model';
 
 export const setupAssociations = () => {
     // ====================== USER ↔ ROLE ======================
@@ -274,6 +277,13 @@ export const setupAssociations = () => {
         onDelete: 'SET NULL',
     });
 
+    UserTestModel.belongsTo(ProblemMetricModel, {
+        foreignKey: 'problem_metric_id',
+        as: 'problemMetric',
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
+    });
+
     // ====================== COGNITIVE TESTS ======================
     UserModel.hasMany(CognitiveTestModel, {
         foreignKey: 'created_by',
@@ -310,6 +320,42 @@ export const setupAssociations = () => {
         onDelete: 'SET NULL',
     });
 
+    // ====================== PROBLEM METRICS ======================
+    UserModel.hasMany(ProblemMetricModel, {
+        foreignKey: 'created_by',
+        as: 'problemMetricsCreated',
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
+    });
+
+    ProblemMetricModel.belongsTo(UserModel, {
+        foreignKey: 'created_by',
+        as: 'creator',
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
+    });
+
+    ProblemMetricModel.hasMany(ProblemPuzzleQuestionModel, {
+        foreignKey: 'problem_metric_id',
+        as: 'questions',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    ProblemPuzzleQuestionModel.belongsTo(ProblemMetricModel, {
+        foreignKey: 'problem_metric_id',
+        as: 'problemMetric',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    ProblemMetricModel.hasMany(UserTestModel, {
+        foreignKey: 'problem_metric_id',
+        as: 'attempts',
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
+    });
+
     // ====================== USER ↔ FEEDBACK (interaction) ======================
     UserModel.hasMany(UserFeedbackModel, {
         foreignKey: 'user_id',
@@ -341,6 +387,21 @@ export const setupAssociations = () => {
     });
 
     TrustscoreHistoryModel.belongsTo(UserModel, {
+        foreignKey: 'user_id',
+        as: 'user',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    // ====================== USER ↔ ACADEMIC RECORDS ======================
+    UserModel.hasMany(AcademicRecordModel, {
+        foreignKey: 'user_id',
+        as: 'academicRecords',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    AcademicRecordModel.belongsTo(UserModel, {
         foreignKey: 'user_id',
         as: 'user',
         onUpdate: 'CASCADE',

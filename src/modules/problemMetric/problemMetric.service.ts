@@ -2,30 +2,30 @@ import { CustomError } from '@/utils/custom-error';
 import { StatusCodes } from 'http-status-codes';
 import { DB } from '@/database';
 import { calculateTrustScoreService } from '@/modules/trustScore/trustScore.service';
-import type { CognitiveTestCategory } from '@/database/models/cognitiveTest.model';
-import type { QuestionDifficulty } from '@/database/models/cognitiveQuestion.model';
+import type { ProblemMetricCategory } from '@/database/models/problemMetric.model';
+import type { ProblemPuzzleDifficulty } from '@/database/models/problemPuzzleQuestion.model';
 
-const validCategory = (c: string): c is CognitiveTestCategory =>
-    ['numerical', 'verbal', 'logical', 'mixed'].includes(c);
+const validCategory = (c: string): c is ProblemMetricCategory =>
+    ['visual_puzzle', 'situational_puzzle', 'riddle', 'other'].includes(c);
 
-const validDifficulty = (d: string): d is QuestionDifficulty =>
+const validDifficulty = (d: string): d is ProblemPuzzleDifficulty =>
     ['easy', 'medium', 'hard'].includes(d);
 
 const CATEGORY_CONTENT_RULES: Record<
-    Exclude<CognitiveTestCategory, 'mixed'>,
+    Exclude<ProblemMetricCategory, 'other'>,
     { label: string; regex: RegExp }
 > = {
-    numerical: {
-        label: 'numerical',
-        regex: /\b(\d+|number|sum|total|difference|multiply|division|ratio|percent|percentage|equation|calculate|math|average|sequence)\b/i,
+    visual_puzzle: {
+        label: 'visual puzzle',
+        regex: /\b(image|picture|shape|pattern|diagram|figure|symbol|visual|mirror|rotate|rotation|sequence|grid|spot|match)\b/i,
     },
-    verbal: {
-        label: 'verbal',
-        regex: /\b(word|meaning|synonym|antonym|sentence|grammar|vocabulary|passage|reading|spelling|language|statement|paragraph)\b/i,
+    situational_puzzle: {
+        label: 'situational puzzle',
+        regex: /\b(situation|scenario|case|response|reaction|decision|choice|action|best step|next step|what should|should you)\b/i,
     },
-    logical: {
-        label: 'logical',
-        regex: /\b(logic|logical|reason|reasoning|pattern|sequence|rule|arrangement|deduction|conclusion|inference|relationship)\b/i,
+    riddle: {
+        label: 'riddle',
+        regex: /\b(riddle|guess|wordplay|clue|hint|who am i|what am i|answer this)\b/i,
     },
 };
 
@@ -42,7 +42,7 @@ const buildQuestionText = (body: {
         .trim();
 
 const validateQuestionMatchesCategory = (
-    category: CognitiveTestCategory,
+    category: ProblemMetricCategory,
     body: {
         prompt?: string;
         option_a?: string;
@@ -51,23 +51,23 @@ const validateQuestionMatchesCategory = (
         option_d?: string;
     },
 ) => {
-    if (category === 'mixed') return;
+    if (category === 'other') return;
 
     const rule = CATEGORY_CONTENT_RULES[category];
     const text = buildQuestionText(body);
     if (!text || rule.regex.test(text)) return;
 
     throw new CustomError(
-        `This ${rule.label} cognitive test only accepts ${rule.label} questions. Please enter a matching question.`,
+        `This ${rule.label} set only accepts ${rule.label} questions. Please enter a matching question.`,
         StatusCodes.BAD_REQUEST,
     );
 };
 
-export const getCognitiveTestAdminService = async (cognitive_test_id: string) => {
-    const test = await DB.CognitiveTests.findByPk(cognitive_test_id, {
+export const getProblemMetricAdminService = async (problem_metric_id: string) => {
+    const metric = await DB.ProblemMetrics.findByPk(problem_metric_id, {
         include: [
             {
-                model: DB.CognitiveQuestions,
+                model: DB.ProblemMetricQuestions,
                 as: 'questions',
                 separate: true,
                 order: [
@@ -77,39 +77,39 @@ export const getCognitiveTestAdminService = async (cognitive_test_id: string) =>
             },
         ],
     });
-    if (!test) {
-        throw new CustomError('Cognitive test not found', StatusCodes.NOT_FOUND);
+    if (!metric) {
+        throw new CustomError('Problem metric not found', StatusCodes.NOT_FOUND);
     }
-    return test.get({ plain: true });
+    return metric.get({ plain: true });
 };
 
-export const createCognitiveTestService = async (
+export const createProblemMetricService = async (
     body: { title: string; description?: string; category?: string },
     created_by: string,
 ) => {
-    const { title, description, category = 'numerical' } = body;
+    const { title, description, category = 'visual_puzzle' } = body;
     if (!title?.trim()) {
         throw new CustomError('Title is required', StatusCodes.BAD_REQUEST);
     }
     if (!validCategory(category)) {
         throw new CustomError('Invalid category', StatusCodes.BAD_REQUEST);
     }
-    const row = await DB.CognitiveTests.create({
+    const row = await DB.ProblemMetrics.create({
         title: title.trim(),
         description: description?.trim() || null,
         category,
         published: false,
         created_by,
     });
-    return getCognitiveTestAdminService(row.cognitive_test_id);
+    return getProblemMetricAdminService(row.problem_metric_id);
 };
 
-export const listCognitiveTestsAdminService = async () => {
-    const rows = await DB.CognitiveTests.findAll({
+export const listProblemMetricsAdminService = async () => {
+    const rows = await DB.ProblemMetrics.findAll({
         order: [['updated_at', 'DESC']],
         include: [
             {
-                model: DB.CognitiveQuestions,
+                model: DB.ProblemMetricQuestions,
                 as: 'questions',
                 attributes: ['question_id'],
             },
@@ -118,7 +118,7 @@ export const listCognitiveTestsAdminService = async () => {
     return rows.map((r) => {
         const plain = r.get({ plain: true }) as any;
         return {
-            cognitive_test_id: plain.cognitive_test_id,
+            problem_metric_id: plain.problem_metric_id,
             title: plain.title,
             description: plain.description,
             category: plain.category,
@@ -131,8 +131,8 @@ export const listCognitiveTestsAdminService = async () => {
     });
 };
 
-export const updateCognitiveTestService = async (
-    cognitive_test_id: string,
+export const updateProblemMetricService = async (
+    problem_metric_id: string,
     body: {
         title?: string;
         description?: string | null;
@@ -140,9 +140,9 @@ export const updateCognitiveTestService = async (
         published?: boolean;
     },
 ) => {
-    const test = await DB.CognitiveTests.findByPk(cognitive_test_id);
-    if (!test) {
-        throw new CustomError('Cognitive test not found', StatusCodes.NOT_FOUND);
+    const metric = await DB.ProblemMetrics.findByPk(problem_metric_id);
+    if (!metric) {
+        throw new CustomError('Problem metric not found', StatusCodes.NOT_FOUND);
     }
     const patch: Record<string, unknown> = {};
     if (body.title !== undefined) {
@@ -161,9 +161,9 @@ export const updateCognitiveTestService = async (
         if (!validCategory(body.category)) {
             throw new CustomError('Invalid category', StatusCodes.BAD_REQUEST);
         }
-        if (body.category !== 'mixed') {
-            const questions = await DB.CognitiveQuestions.findAll({
-                where: { cognitive_test_id },
+        if (body.category !== 'other') {
+            const questions = await DB.ProblemMetricQuestions.findAll({
+                where: { problem_metric_id },
                 attributes: ['prompt', 'option_a', 'option_b', 'option_c', 'option_d'],
             });
             for (const question of questions) {
@@ -181,21 +181,21 @@ export const updateCognitiveTestService = async (
     if (body.published !== undefined) {
         patch.published = Boolean(body.published);
     }
-    await test.update(patch);
-    return getCognitiveTestAdminService(cognitive_test_id);
+    await metric.update(patch);
+    return getProblemMetricAdminService(problem_metric_id);
 };
 
-export const deleteCognitiveTestService = async (cognitive_test_id: string) => {
-    const test = await DB.CognitiveTests.findByPk(cognitive_test_id);
-    if (!test) {
-        throw new CustomError('Cognitive test not found', StatusCodes.NOT_FOUND);
+export const deleteProblemMetricService = async (problem_metric_id: string) => {
+    const metric = await DB.ProblemMetrics.findByPk(problem_metric_id);
+    if (!metric) {
+        throw new CustomError('Problem metric not found', StatusCodes.NOT_FOUND);
     }
-    await test.destroy();
+    await metric.destroy();
     return { deleted: true };
 };
 
-export const addQuestionService = async (
-    cognitive_test_id: string,
+export const addProblemMetricQuestionService = async (
+    problem_metric_id: string,
     body: {
         prompt: string;
         option_a: string;
@@ -207,9 +207,9 @@ export const addQuestionService = async (
         sort_order?: number;
     },
 ) => {
-    const test = await DB.CognitiveTests.findByPk(cognitive_test_id);
-    if (!test) {
-        throw new CustomError('Cognitive test not found', StatusCodes.NOT_FOUND);
+    const metric = await DB.ProblemMetrics.findByPk(problem_metric_id);
+    if (!metric) {
+        throw new CustomError('Problem metric not found', StatusCodes.NOT_FOUND);
     }
     const {
         prompt,
@@ -224,12 +224,7 @@ export const addQuestionService = async (
     if (!prompt?.trim()) {
         throw new CustomError('Prompt is required', StatusCodes.BAD_REQUEST);
     }
-    for (const [k, v] of Object.entries({
-        option_a,
-        option_b,
-        option_c,
-        option_d,
-    })) {
+    for (const [k, v] of Object.entries({ option_a, option_b, option_c, option_d })) {
         if (v == null || !String(v).trim()) {
             throw new CustomError(`${k} is required`, StatusCodes.BAD_REQUEST);
         }
@@ -241,7 +236,7 @@ export const addQuestionService = async (
     if (!validDifficulty(difficulty)) {
         throw new CustomError('Invalid difficulty', StatusCodes.BAD_REQUEST);
     }
-    validateQuestionMatchesCategory(test.category, {
+    validateQuestionMatchesCategory(metric.category, {
         prompt,
         option_a,
         option_b,
@@ -251,14 +246,14 @@ export const addQuestionService = async (
 
     let order = sort_order;
     if (order === undefined || order === null) {
-        const max = await DB.CognitiveQuestions.max('sort_order', {
-            where: { cognitive_test_id },
+        const max = await DB.ProblemMetricQuestions.max('sort_order', {
+            where: { problem_metric_id },
         });
         order = (typeof max === 'number' ? max : 0) + 1;
     }
 
-    await DB.CognitiveQuestions.create({
-        cognitive_test_id,
+    await DB.ProblemMetricQuestions.create({
+        problem_metric_id,
         prompt: prompt.trim(),
         option_a: String(option_a).trim(),
         option_b: String(option_b).trim(),
@@ -269,11 +264,11 @@ export const addQuestionService = async (
         sort_order: order,
     });
 
-    return getCognitiveTestAdminService(cognitive_test_id);
+    return getProblemMetricAdminService(problem_metric_id);
 };
 
-export const updateQuestionService = async (
-    cognitive_test_id: string,
+export const updateProblemMetricQuestionService = async (
+    problem_metric_id: string,
     question_id: string,
     body: Partial<{
         prompt: string;
@@ -286,15 +281,15 @@ export const updateQuestionService = async (
         sort_order: number;
     }>,
 ) => {
-    const q = await DB.CognitiveQuestions.findOne({
-        where: { question_id, cognitive_test_id },
+    const q = await DB.ProblemMetricQuestions.findOne({
+        where: { question_id, problem_metric_id },
     });
     if (!q) {
         throw new CustomError('Question not found', StatusCodes.NOT_FOUND);
     }
-    const test = await DB.CognitiveTests.findByPk(cognitive_test_id);
-    if (!test) {
-        throw new CustomError('Cognitive test not found', StatusCodes.NOT_FOUND);
+    const metric = await DB.ProblemMetrics.findByPk(problem_metric_id);
+    if (!metric) {
+        throw new CustomError('Problem metric not found', StatusCodes.NOT_FOUND);
     }
     const patch: Record<string, unknown> = {};
     if (body.prompt !== undefined) {
@@ -327,7 +322,7 @@ export const updateQuestionService = async (
     if (body.sort_order !== undefined) {
         patch.sort_order = Number(body.sort_order);
     }
-    validateQuestionMatchesCategory(test.category, {
+    validateQuestionMatchesCategory(metric.category, {
         prompt:
             body.prompt !== undefined ? String(body.prompt) : String(q.get('prompt') || ''),
         option_a:
@@ -340,31 +335,30 @@ export const updateQuestionService = async (
             body.option_d !== undefined ? String(body.option_d) : String(q.get('option_d') || ''),
     });
     await q.update(patch);
-    return getCognitiveTestAdminService(cognitive_test_id);
+    return getProblemMetricAdminService(problem_metric_id);
 };
 
-export const deleteQuestionService = async (
-    cognitive_test_id: string,
+export const deleteProblemMetricQuestionService = async (
+    problem_metric_id: string,
     question_id: string,
 ) => {
-    const q = await DB.CognitiveQuestions.findOne({
-        where: { question_id, cognitive_test_id },
+    const q = await DB.ProblemMetricQuestions.findOne({
+        where: { question_id, problem_metric_id },
     });
     if (!q) {
         throw new CustomError('Question not found', StatusCodes.NOT_FOUND);
     }
     await q.destroy();
-    return getCognitiveTestAdminService(cognitive_test_id);
+    return getProblemMetricAdminService(problem_metric_id);
 };
 
-/** Published tests for students — no correct answers. */
-export const listPublishedCognitiveTestsService = async () => {
-    const rows = await DB.CognitiveTests.findAll({
+export const listPublishedProblemMetricsService = async () => {
+    const rows = await DB.ProblemMetrics.findAll({
         where: { published: true },
-        attributes: ['cognitive_test_id', 'title', 'description', 'category', 'updated_at'],
+        attributes: ['problem_metric_id', 'title', 'description', 'category', 'updated_at'],
         include: [
             {
-                model: DB.CognitiveQuestions,
+                model: DB.ProblemMetricQuestions,
                 as: 'questions',
                 attributes: ['question_id'],
             },
@@ -374,7 +368,7 @@ export const listPublishedCognitiveTestsService = async () => {
     return rows.map((r) => {
         const plain = r.get({ plain: true }) as any;
         return {
-            cognitive_test_id: plain.cognitive_test_id,
+            problem_metric_id: plain.problem_metric_id,
             title: plain.title,
             description: plain.description,
             category: plain.category,
@@ -384,12 +378,12 @@ export const listPublishedCognitiveTestsService = async () => {
     });
 };
 
-export const getPublishedTestForAttemptService = async (cognitive_test_id: string) => {
-    const test = await DB.CognitiveTests.findOne({
-        where: { cognitive_test_id, published: true },
+export const getPublishedProblemMetricForAttemptService = async (problem_metric_id: string) => {
+    const metric = await DB.ProblemMetrics.findOne({
+        where: { problem_metric_id, published: true },
         include: [
             {
-                model: DB.CognitiveQuestions,
+                model: DB.ProblemMetricQuestions,
                 as: 'questions',
                 separate: true,
                 order: [
@@ -409,15 +403,15 @@ export const getPublishedTestForAttemptService = async (cognitive_test_id: strin
             },
         ],
     });
-    if (!test) {
-        throw new CustomError('Test not found or not published', StatusCodes.NOT_FOUND);
+    if (!metric) {
+        throw new CustomError('Problem metric not found or not published', StatusCodes.NOT_FOUND);
     }
-    const plain = test.get({ plain: true }) as any;
+    const plain = metric.get({ plain: true }) as any;
     if (!plain.questions?.length) {
-        throw new CustomError('This test has no questions yet', StatusCodes.BAD_REQUEST);
+        throw new CustomError('This problem metric has no questions yet', StatusCodes.BAD_REQUEST);
     }
     return {
-        cognitive_test_id: plain.cognitive_test_id,
+        problem_metric_id: plain.problem_metric_id,
         title: plain.title,
         description: plain.description,
         category: plain.category,
@@ -425,29 +419,29 @@ export const getPublishedTestForAttemptService = async (cognitive_test_id: strin
     };
 };
 
-export const submitCognitiveAttemptService = async (
+export const submitProblemMetricAttemptService = async (
     user_id: string,
-    cognitive_test_id: string,
+    problem_metric_id: string,
     answers: Record<string, number>,
 ) => {
-    const test = await DB.CognitiveTests.findOne({
-        where: { cognitive_test_id, published: true },
+    const metric = await DB.ProblemMetrics.findOne({
+        where: { problem_metric_id, published: true },
         include: [
             {
-                model: DB.CognitiveQuestions,
+                model: DB.ProblemMetricQuestions,
                 as: 'questions',
             },
         ],
     });
-    if (!test) {
-        throw new CustomError('Test not found or not published', StatusCodes.NOT_FOUND);
+    if (!metric) {
+        throw new CustomError('Problem metric not found or not published', StatusCodes.NOT_FOUND);
     }
-    const questions = (test as any).questions as Array<{
+    const questions = (metric as any).questions as Array<{
         question_id: string;
         correct_index: number;
     }>;
     if (!questions?.length) {
-        throw new CustomError('This test has no questions', StatusCodes.BAD_REQUEST);
+        throw new CustomError('This problem metric has no questions', StatusCodes.BAD_REQUEST);
     }
 
     const qIds = new Set(questions.map((q) => q.question_id));
@@ -478,7 +472,8 @@ export const submitCognitiveAttemptService = async (
 
     await DB.UserTests.create({
         user_id,
-        cognitive_test_id,
+        problem_metric_id,
+        test_name: metric.get('title') as string,
         score,
         max_score,
         taken_at: new Date(),
@@ -490,19 +485,19 @@ export const submitCognitiveAttemptService = async (
         score,
         max_score,
         percentage: max_score > 0 ? Math.round((score / max_score) * 10000) / 100 : 0,
-        cognitive_test_id,
-        title: test.get('title'),
+        problem_metric_id,
+        title: metric.get('title'),
     };
 };
 
-export const getMyCognitiveAttemptHistoryService = async (user_id: string) => {
+export const getMyProblemMetricAttemptHistoryService = async (user_id: string) => {
     const rows = await DB.UserTests.findAll({
-        where: { user_id, cognitive_test_id: { [DB.Sequelize.Op.ne]: null } },
+        where: { user_id, problem_metric_id: { [DB.Sequelize.Op.ne]: null } },
         include: [
             {
-                model: DB.CognitiveTests,
-                as: 'cognitiveTest',
-                attributes: ['cognitive_test_id', 'title', 'category'],
+                model: DB.ProblemMetrics,
+                as: 'problemMetric',
+                attributes: ['problem_metric_id', 'title', 'category'],
                 required: false,
             },
         ],
@@ -513,15 +508,15 @@ export const getMyCognitiveAttemptHistoryService = async (user_id: string) => {
         const score = Number(r.score) || 0;
         const max = Number(r.max_score) || 0;
         const percentage = max > 0 ? Math.round((score / max) * 10000) / 100 : 0;
-        const test = r.cognitiveTest;
+        const metric = r.problemMetric;
         return {
             test_id: r.test_id,
-            cognitive_test_id: r.cognitive_test_id,
+            problem_metric_id: r.problem_metric_id,
             title:
-                test?.title ||
+                metric?.title ||
                 r.test_name ||
-                `Cognitive test ${String(r.cognitive_test_id || '').slice(0, 8)}`,
-            category: test?.category || 'mixed',
+                `Problem metric ${String(r.problem_metric_id || '').slice(0, 8)}`,
+            category: metric?.category || 'other',
             score,
             max_score: max,
             percentage,

@@ -15,6 +15,8 @@ import momoRouter from '@/modules/momo/momo.routes';
 import dashboardRouter from '@/modules/dashboard/dashboard.routes';
 import disputeRouter from '@/modules/dispute/dispute.routes';
 import cognitiveTestRouter from '@/modules/cognitiveTest/cognitiveTest.routes';
+import problemMetricRouter from '@/modules/problemMetric/problemMetric.routes';
+import academicRecordRouter from '@/modules/academicRecord/academicRecord.routes';
 import express from 'express';
 
 const router = express.Router();
@@ -37,5 +39,7 @@ router.use('/momo', momoRouter);
 router.use('/dashboard', dashboardRouter);
 router.use('/disputes', disputeRouter);
 router.use('/cognitive-tests', cognitiveTestRouter);
+router.use('/problem-metrics', problemMetricRouter);
+router.use('/academic-records', academicRecordRouter);
 
 export default router;

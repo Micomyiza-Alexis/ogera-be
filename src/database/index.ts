@@ -29,9 +29,12 @@ import disputeMessageModel from './models/disputeMessage.model';
 import disputeTimelineModel from './models/disputeTimeline.model';
 import cognitiveTestModel from './models/cognitiveTest.model';
 import cognitiveQuestionModel from './models/cognitiveQuestion.model';
+import problemMetricModel from './models/problemMetric.model';
+import problemPuzzleQuestionModel from './models/problemPuzzleQuestion.model';
 import userTestModel from './models/userTest.model';
 import userFeedbackModel from './models/userFeedback.model';
 import trustscoreHistoryModel from './models/trustscoreHistory.model';
+import academicRecordModel from './models/academicRecord.model';
 import { setupAssociations } from '@/association/index';
 
 import {
@@ -154,9 +157,12 @@ const DisputeMessages = disputeMessageModel(sequelize);
 const DisputeTimeline = disputeTimelineModel(sequelize);
 const CognitiveTests = cognitiveTestModel(sequelize);
 const CognitiveQuestions = cognitiveQuestionModel(sequelize);
+const ProblemMetrics = problemMetricModel(sequelize);
+const ProblemMetricQuestions = problemPuzzleQuestionModel(sequelize);
 const UserTests = userTestModel(sequelize);
 const UserFeedbacks = userFeedbackModel(sequelize);
 const TrustscoreHistory = trustscoreHistoryModel(sequelize);
+const AcademicRecords = academicRecordModel(sequelize);
 
 // Apply Associations
 setupAssociations();
@@ -886,9 +892,12 @@ export const DB = {
     DisputeTimeline,
     CognitiveTests,
     CognitiveQuestions,
+    ProblemMetrics,
+    ProblemMetricQuestions,
     UserTests,
     UserFeedbacks,
     TrustscoreHistory,
+    AcademicRecords,
     sequelize,
     Sequelize,
 };
