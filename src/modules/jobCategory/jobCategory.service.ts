@@ -4,17 +4,22 @@ import { StatusCodes } from 'http-status-codes';
 import { JobCategory } from '@/interfaces/jobCategory.interfaces';
 import { DB } from '@/database';
 
+// Both superadmin and admin can manage categories.
+const assertAdminRole = (userRole: string, action: string) => {
+    const role = (userRole || '').toLowerCase();
+    if (role !== 'admin' && role !== 'superadmin') {
+        throw new CustomError(
+            `Only admin or superadmin can ${action} job categories`,
+            StatusCodes.FORBIDDEN,
+        );
+    }
+};
+
 export const createCategoryService = async (
     categoryData: Partial<JobCategory>,
     userRole: string,
 ) => {
-    // Only superadmin can create categories
-    if (userRole !== 'superadmin' && userRole !== 'superAdmin') {
-        throw new CustomError(
-            'Only superadmin can create job categories',
-            StatusCodes.FORBIDDEN,
-        );
-    }
+    assertAdminRole(userRole, 'create');
 
     // Validate required fields
     if (!categoryData.name || !categoryData.name.trim()) {
@@ -92,13 +97,7 @@ export const updateCategoryService = async (
     updates: Partial<JobCategory>,
     userRole: string,
 ) => {
-    // Only superadmin can update categories
-    if (userRole !== 'superadmin' && userRole !== 'superAdmin') {
-        throw new CustomError(
-            'Only superadmin can update job categories',
-            StatusCodes.FORBIDDEN,
-        );
-    }
+    assertAdminRole(userRole, 'update');
 
     const category = await repo.findCategoryById(category_id);
     if (!category) {
@@ -141,13 +140,7 @@ export const deleteCategoryService = async (
     category_id: string,
     userRole: string,
 ) => {
-    // Only superadmin can delete categories
-    if (userRole !== 'superadmin' && userRole !== 'superAdmin') {
-        throw new CustomError(
-            'Only superadmin can delete job categories',
-            StatusCodes.FORBIDDEN,
-        );
-    }
+    assertAdminRole(userRole, 'delete');
 
     const category = await repo.findCategoryById(category_id);
     if (!category) {

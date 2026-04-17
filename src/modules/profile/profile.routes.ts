@@ -1,5 +1,7 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { authMiddleware } from '@/middlewares/auth.middleware';
+import { superadminOnly } from '@/middlewares/role.middleware';
 import {
     // Skills
     addSkill,
@@ -32,15 +34,38 @@ import {
     updateExtendedProfile,
     // Full Profile
     getFullProfile,
+    // Profile Image & Completion
+    uploadProfileImage,
+    getProfileCompletion,
+    updateProfileImageUrl,
+    // Other User Profile
+    getOtherUserFullProfile,
 } from './profile.controller';
 
 const router = Router();
+
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+        const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        allowed.includes(file.mimetype) ? cb(null, true) : cb(new Error('Only image files allowed'));
+    },
+});
 
 // All routes require authentication
 router.use(authMiddleware);
 
 // ====================== FULL PROFILE ======================
 router.get('/full', getFullProfile);
+router.get('/full/:userId', superadminOnly, getOtherUserFullProfile);
+
+// ====================== PROFILE COMPLETION ======================
+router.get('/completion', getProfileCompletion);
+
+// ====================== PROFILE IMAGE ======================
+router.post('/upload-image', upload.single('profile_image'), uploadProfileImage);
+router.put('/image', updateProfileImageUrl);
 
 // ====================== EXTENDED PROFILE ======================
 router.get('/extended', getExtendedProfile);

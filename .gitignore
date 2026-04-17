@@ -58,6 +58,9 @@ web_modules/
 .env.development
 .env.production
 
+# User-uploaded content (resumes, profile images, academic proofs)
+uploads/
+
 .cache
 .parcel-cache
 

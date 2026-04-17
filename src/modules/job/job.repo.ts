@@ -1,13 +1,21 @@
 import { DB } from "@/database";
+import { Op } from "sequelize";
 
 const repo = {
   createJob: async (jobData: any) => {
     return await DB.Jobs.create(jobData);
   },
 
-  findAllJobs: async (status?: string) => {
+  findAllJobs: async (status?: string, funded?: boolean) => {
     // Filter by status if provided, ensuring case-sensitive match
-    const whereClause = status ? { status: status as 'Pending' | 'Active' | 'Inactive' | 'Completed' } : {};
+    const whereClause: Record<string, unknown> = status
+      ? { status: status as 'Pending' | 'Active' | 'Inactive' | 'Completed' }
+      : {};
+    if (funded === true) {
+      whereClause.funding_status = { [Op.in]: ['Funded', 'Paid'] };
+    } else if (funded === false) {
+      whereClause.funding_status = 'Unfunded';
+    }
     return await DB.Jobs.findAll({
       where: whereClause,
       include: [

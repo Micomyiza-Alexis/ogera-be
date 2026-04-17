@@ -102,13 +102,26 @@ authRouter.get('/me', authMiddleware, async (req, res) => {
             console.log('🔍 [AUTH/ME] Skipping permission fetch (superadmin or exact "admin" roleName bypass)');
         }
         
+        // Fetch full user from DB to include profile_image_url and other fields
+        let fullUserData: any = req.user;
+        try {
+            const fullUser = await DB.Users.findOne({
+                where: { user_id: req.user?.user_id },
+                attributes: { exclude: ['password_hash', 'reset_otp', 'reset_otp_expiry', 'two_fa_secret', 'phone_verification_otp', 'phone_verification_otp_expiry', 'login_2fa_otp', 'login_2fa_otp_expiry', 'email_verification_token', 'email_verification_token_expiry'] },
+                include: [{ model: DB.Roles, as: 'role', attributes: ['id', 'roleName', 'roleType'] }],
+            });
+            if (fullUser) {
+                fullUserData = fullUser.toJSON();
+            }
+        } catch (dbError: any) {
+            console.warn('⚠️ [AUTH/ME] Could not fetch full user, falling back to JWT data:', dbError.message);
+        }
+
         const responseData = {
-            ...req.user,
-            permissions, // Include permissions in user object
+            ...fullUserData,
+            permissions,
         };
-        
-        console.log('🔍 [AUTH/ME] Sending response with permissions:', JSON.stringify(responseData.permissions, null, 2));
-        
+
         res.json({
             message: 'Protected API working',
             user: responseData,

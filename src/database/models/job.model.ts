@@ -37,7 +37,7 @@ export class JobModel extends Model<Job, JobCreationAttributes> implements Job {
     public employment_type?: string;
     public experience_level?: string;
     public status!: 'Pending' | 'Active' | 'Inactive' | 'Completed';
-    public funding_status?: 'Unfunded' | 'Pending' | 'Funded';
+    public funding_status?: 'Unfunded' | 'Pending' | 'Funded' | 'Paid';
     public momo_reference_id?: string | null;
     public momo_paid_at?: Date | null;
     public disbursement_reference_id?: string | null;

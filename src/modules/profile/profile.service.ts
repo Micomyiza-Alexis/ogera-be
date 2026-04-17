@@ -1,8 +1,11 @@
+import * as path from 'path';
 import { StatusCodes } from 'http-status-codes';
 import { CustomError } from '@/utils/custom-error';
 import logger from '@/utils/logger';
 import { calculateTrustScoreService } from '@/modules/trustScore/trustScore.service';
 import repo from './profile.repo';
+import { saveFile } from '@/utils/storage.service';
+import { DB } from '@/database';
 import {
     CreateSkillRequest,
     CreateEmploymentRequest,
@@ -262,6 +265,118 @@ export const updateExtendedProfileService = async (user_id: string, data: Update
 // ====================== FULL PROFILE ======================
 export const getFullProfileService = async (user_id: string) => {
     const fullProfile = await repo.getFullProfile(user_id);
+    return fullProfile;
+};
+
+// ====================== PROFILE IMAGE UPLOAD ======================
+export const uploadProfileImageService = async (user_id: string, file: Express.Multer.File) => {
+    const { path: filePath, storageType } = await saveFile(file, 'profile-images');
+    let imageUrl = filePath;
+    if (storageType === 'local') {
+        const fileName = path.basename(filePath);
+        const baseUrl = process.env.BASE_URL?.replace('/api', '') || `http://localhost:${process.env.PORT || 5000}`;
+        imageUrl = `${baseUrl}/uploads/profile-images/${fileName}`;
+    }
+    try {
+        await DB.Users.update({ profile_image_url: imageUrl }, { where: { user_id } });
+    } catch (err: any) {
+        console.warn('⚠️ Could not update profile_image_url column:', err.message);
+    }
+    return { profile_image_url: imageUrl };
+};
+
+// ====================== PROFILE COMPLETION ======================
+export const getProfileCompletionService = async (user_id: string) => {
+    const user = await DB.Users.findByPk(user_id);
+    if (!user) throw new CustomError('User not found', StatusCodes.NOT_FOUND);
+
+    const fullProfile = await repo.getFullProfile(user_id);
+    const role = (user.role_type || '').toLowerCase();
+
+    const completedFields: string[] = [];
+    const missingFields: string[] = [];
+
+    if (user.full_name) completedFields.push('full_name'); else missingFields.push('full_name');
+    if (user.email_verified) completedFields.push('email_verified'); else missingFields.push('email_verified');
+    if (user.phone_verified) completedFields.push('phone_verified'); else missingFields.push('phone_verified');
+    if ((user as any).profile_image_url) completedFields.push('profile_image'); else missingFields.push('profile_image');
+
+    const bio = fullProfile.extendedProfile?.profile_summary || '';
+    if (bio.length >= 20) completedFields.push('bio'); else missingFields.push('bio');
+
+    if (role === 'student') {
+        if (user.resume_url) completedFields.push('resume'); else missingFields.push('resume');
+        if (fullProfile.skills && fullProfile.skills.length >= 3) completedFields.push('skills'); else missingFields.push('skills');
+        if (fullProfile.educations && fullProfile.educations.length >= 1) completedFields.push('education'); else missingFields.push('education');
+        if (fullProfile.employments && fullProfile.employments.length >= 1) completedFields.push('employment'); else missingFields.push('employment');
+        if (fullProfile.projects && fullProfile.projects.length >= 1) completedFields.push('projects'); else missingFields.push('projects');
+        if (user.preferred_location) completedFields.push('preferred_location'); else missingFields.push('preferred_location');
+    } else if (role === 'employer') {
+        if (user.business_registration_id) completedFields.push('business_registration'); else missingFields.push('business_registration');
+        if (bio.length >= 50) {
+            if (!completedFields.includes('bio')) completedFields.push('company_description');
+        } else {
+            missingFields.push('company_description');
+        }
+        if (user.preferred_location) completedFields.push('preferred_location'); else missingFields.push('preferred_location');
+    }
+
+    const totalFields = completedFields.length + missingFields.length;
+    const percentage = totalFields > 0 ? Math.round((completedFields.length / totalFields) * 100) : 0;
+
+    const stepMap: Record<string, { title: string; description: string; icon: string }> = {
+        profile_image: { title: 'Profile Photo', description: 'Upload a profile photo', icon: 'camera' },
+        bio: { title: 'Bio / Summary', description: 'Write a short bio about yourself', icon: 'document' },
+        skills: { title: 'Skills', description: 'Add at least 3 key skills', icon: 'star' },
+        education: { title: 'Education', description: 'Add your education history', icon: 'academic' },
+        employment: { title: 'Work Experience', description: 'Add your work experience', icon: 'briefcase' },
+        resume: { title: 'Resume', description: 'Upload your resume', icon: 'document' },
+        email_verified: { title: 'Email Verification', description: 'Verify your email address', icon: 'mail' },
+        phone_verified: { title: 'Phone Verification', description: 'Verify your phone number', icon: 'phone' },
+        full_name: { title: 'Full Name', description: 'Complete your full name', icon: 'user' },
+        preferred_location: { title: 'Location', description: 'Set your preferred location', icon: 'location' },
+        business_registration: { title: 'Business Registration', description: 'Add your business registration ID', icon: 'building' },
+        company_description: { title: 'Company Description', description: 'Describe your company', icon: 'document' },
+        projects: { title: 'Projects', description: 'Add at least one project', icon: 'folder' },
+    };
+
+    const wizardSteps = missingFields.map((field, i) => ({
+        step: i + 1,
+        title: stepMap[field]?.title || field,
+        description: stepMap[field]?.description || `Complete ${field}`,
+        field,
+        icon: stepMap[field]?.icon || 'star',
+    }));
+
+    return {
+        profile_completion_percentage: percentage,
+        is_complete: missingFields.length === 0,
+        profile_completed_at: missingFields.length === 0 ? new Date().toISOString() : null,
+        missingFields,
+        completedFields,
+        badges: [],
+        wizardSteps,
+        profile_image_url: (user as any).profile_image_url || null,
+    };
+};
+
+// ====================== UPDATE PROFILE IMAGE URL ======================
+export const updateProfileImageUrlService = async (user_id: string, profile_image_url: string) => {
+    const user = await DB.Users.findByPk(user_id);
+    if (!user) throw new CustomError('User not found', StatusCodes.NOT_FOUND);
+    await DB.Users.update({ profile_image_url }, { where: { user_id } });
+    const completion = await getProfileCompletionService(user_id);
+    return {
+        profile_image_url,
+        profile_completion_percentage: completion.profile_completion_percentage,
+        missingFields: completion.missingFields,
+        completedFields: completion.completedFields,
+    };
+};
+
+// ====================== OTHER USER FULL PROFILE ======================
+export const getOtherUserFullProfileService = async (target_user_id: string) => {
+    const fullProfile = await repo.getFullProfile(target_user_id);
     return fullProfile;
 };
 

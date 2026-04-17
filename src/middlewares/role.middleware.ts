@@ -10,10 +10,32 @@ export const PermissionChecker = (route: string, action: string) => {
             }
 
             const roleName = req.user.role;
+            const normalizedRole = roleName?.toLowerCase?.() || '';
 
             // ⭐ Superadmin bypasses all permissions (case-insensitive)
             // Superadmin has full access to everything
-            if (roleName?.toLowerCase() === 'superadmin') {
+            if (normalizedRole === 'superadmin') {
+                return next();
+            }
+
+            // Keep built-in product roles aligned with the frontend permission defaults.
+            // Employers are expected to manage jobs even when their role record does not
+            // include explicit permission_json rules for "/jobs".
+            if (normalizedRole === 'employer' && route === '/jobs') {
+                return next();
+            }
+
+            // Students can access jobs/disputes and academic verification views by default.
+            if (
+                normalizedRole === 'student' &&
+                ((route === '/jobs' || route === '/disputes') ||
+                    (route === '/academic-verifications' && action === 'view'))
+            ) {
+                return next();
+            }
+
+            // Verification admins retain default academic verification access.
+            if (normalizedRole === 'verifydocadmin' && route === '/academic-verifications') {
                 return next();
             }
 
@@ -27,7 +49,7 @@ export const PermissionChecker = (route: string, action: string) => {
             // But note: Custom admin roles (like "job-admin") should still check permissions
             // So we only bypass if the roleName is exactly "admin" (legacy behavior)
             // For custom admin roles, we check permissions below
-            if (roleName === 'admin' && role.roleType === 'admin') {
+            if (normalizedRole === 'admin' && role.roleType === 'admin') {
                 return next();
             }
 

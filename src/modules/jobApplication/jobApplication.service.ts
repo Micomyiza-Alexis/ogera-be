@@ -12,6 +12,7 @@ import {
     createApplicationStatusNotification,
 } from '@/modules/notification/notification.service';
 import * as path from 'path';
+import * as messagesRepo from '@/modules/messages/messages.repo';
 
 /**
  * Convert resume URL to API endpoint format if it's a local file path
@@ -97,6 +98,34 @@ export const applyForJobService = async (
         );
     }
 
+    // ===== Required document validation =====
+    // Cover letter: required, minimum 50 characters.
+    const coverLetter = (applicationData.cover_letter || '').trim();
+    if (!coverLetter) {
+        throw new CustomError(
+            'A cover letter is required to apply',
+            StatusCodes.BAD_REQUEST,
+        );
+    }
+    if (coverLetter.length < 50) {
+        throw new CustomError(
+            'Cover letter is too short — please write at least 50 characters',
+            StatusCodes.BAD_REQUEST,
+        );
+    }
+
+    // Resume: required. Accept either one uploaded with this request,
+    // OR one already stored on the student's profile.
+    const resumeUrl = applicationData.resume_url || (student as any).resume_url;
+    if (!resumeUrl) {
+        throw new CustomError(
+            'A resume is required — upload one to your profile or attach it to this application',
+            StatusCodes.BAD_REQUEST,
+        );
+    }
+    // Make sure the application row carries the resolved resume_url
+    applicationData.resume_url = resumeUrl;
+
     // Check if job exists and get questions
     const job = await DB.Jobs.findOne({
         where: { job_id },
@@ -111,6 +140,12 @@ export const applyForJobService = async (
     });
     if (!job) {
         throw new CustomError('Job not found', StatusCodes.NOT_FOUND);
+    }
+    if (job.funding_status !== 'Funded' && job.funding_status !== 'Paid') {
+        throw new CustomError(
+            'This job is not funded yet, so applications are currently closed.',
+            StatusCodes.BAD_REQUEST,
+        );
     }
 
     // Validate required questions are answered
@@ -552,6 +587,26 @@ export const updateApplicationStatusService = async (
         } catch (error) {
             console.error('Failed to create notification for student:', error);
             // Don't fail the request if notification creation fails
+        }
+
+        // CRITICAL: Create conversation automatically when application is ACCEPTED
+        if (status === 'Accepted') {
+            try {
+                // Use data already loaded in updatedApplication to create conversation
+                if (updatedApplication?.job?.employer_id && updatedApplication?.student_id && updatedApplication?.job_id) {
+                    const conversation = await messagesRepo.createOrGetConversationRepo(
+                        updatedApplication.job.employer_id,
+                        updatedApplication.student_id,
+                        updatedApplication.job_id
+                    );
+                    console.log(`✓ Conversation ${conversation.conversation_id} created/retrieved for approved application ${application_id}`);
+                } else {
+                    console.warn(`⚠️ Missing required data for conversation creation: employer_id=${updatedApplication?.job?.employer_id}, student_id=${updatedApplication?.student_id}, job_id=${updatedApplication?.job_id}`);
+                }
+            } catch (error) {
+                console.error('Failed to create conversation for approved application:', error);
+                // Don't fail the request if conversation creation fails
+            }
         }
     }
 

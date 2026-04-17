@@ -73,6 +73,23 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
         const result = await registerUser(req.body, frontendOrigin);
 
+        // Set the refresh token cookie so the browser can silently refresh —
+        // mirrors the login flow, enabling auto-login straight after signup.
+        if (result.refreshToken) {
+            res.cookie('refreshToken', result.refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+            });
+            res.cookie('isLoggedIn', 'true', {
+                httpOnly: false,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+            });
+        }
+
         response.response(
             res,
             true,
@@ -118,7 +135,7 @@ export const addUserController = async (
 // -------------------- LOGIN --------------------
 export const login = async (req: Request, res: Response): Promise<void> => {
     try {
-        const result: any = await loginUser(req.body);
+        const result: any = await loginUser(req.body, req);
 
         // If 2FA is enabled, require step-2 verification before issuing tokens/cookies
         if (result?.requires2FA) {
@@ -142,14 +159,14 @@ export const login = async (req: Request, res: Response): Promise<void> => {
             httpOnly: true,
             // secure: false,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: 'lax',
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
         // 2. The Hint Cookie (NOT httpOnly - so JS can read it) ⭐
         res.cookie('isLoggedIn', 'true', {
             httpOnly: false, // Accessible by frontend
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: 'lax',
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
@@ -437,18 +454,19 @@ export const verifyLogin2FA = async (req: Request, res: Response): Promise<void>
         const { user, accessToken, refreshToken } = await verifyLogin2FAService(
             twoFactorToken,
             token,
+            req,
         );
 
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: 'lax',
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
         res.cookie('isLoggedIn', 'true', {
             httpOnly: false,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: 'lax',
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
@@ -490,7 +508,7 @@ export const refreshAccessToken = async (
             httpOnly: true,
             // secure: false,
             secure: process.env.NODE_ENV === 'production', // Only true in production
-            sameSite: 'strict',
+            sameSite: 'lax',
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
@@ -514,7 +532,7 @@ export const refreshAccessToken = async (
 // -------------------- LOGOUT --------------------
 export const logout = async (req: Request, res: Response): Promise<void> => {
     try {
-        await logoutUser();
+        await logoutUser(req);
 
         res.clearCookie('refreshToken');
         res.clearCookie('isLoggedIn'); // Clear the hint ⭐

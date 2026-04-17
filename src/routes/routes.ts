@@ -1,6 +1,7 @@
 import authRouter from '@/modules/auth/auth.routes';
 import roleRouter from '@/modules/role/role.routes';
 import permissionRouter from '@/modules/permission/permission.routes';
+import sessionRouter from '@/modules/session/session.routes';
 import jobRouter from '@/modules/job/job.routes';
 import jobCategoryRouter from '@/modules/jobCategory/jobCategory.routes';
 import jobApplicationRouter from '@/modules/jobApplication/jobApplication.routes';
@@ -17,6 +18,13 @@ import disputeRouter from '@/modules/dispute/dispute.routes';
 import cognitiveTestRouter from '@/modules/cognitiveTest/cognitiveTest.routes';
 import problemMetricRouter from '@/modules/problemMetric/problemMetric.routes';
 import academicRecordRouter from '@/modules/academicRecord/academicRecord.routes';
+
+import contactRouter from '@/modules/contact/contact.routes';
+import interviewRouter from '@/modules/interview/interview.routes';
+
+import taskRouter from '@/modules/task/task.routes';
+import messagesRouter from '@/modules/messages/messages.routes';
+
 import express from 'express';
 
 const router = express.Router();
@@ -24,6 +32,7 @@ const router = express.Router();
 router.use('/auth', authRouter);
 router.use('/roles', roleRouter);
 router.use('/permissions', permissionRouter);
+router.use('/sessions', sessionRouter);
 router.use('/jobs', jobRouter);
 router.use('/job-categories', jobCategoryRouter);
 router.use('/', jobApplicationRouter);
@@ -41,5 +50,12 @@ router.use('/disputes', disputeRouter);
 router.use('/cognitive-tests', cognitiveTestRouter);
 router.use('/problem-metrics', problemMetricRouter);
 router.use('/academic-records', academicRecordRouter);
+
+router.use('/contact', contactRouter);
+router.use('/interviews', interviewRouter);
+
+router.use('/messages', messagesRouter);
+router.use('/', taskRouter);
+
 
 export default router;

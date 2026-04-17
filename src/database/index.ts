@@ -35,6 +35,10 @@ import userTestModel from './models/userTest.model';
 import userFeedbackModel from './models/userFeedback.model';
 import trustscoreHistoryModel from './models/trustscoreHistory.model';
 import academicRecordModel from './models/academicRecord.model';
+import sessionModel from './models/session.model';
+import taskModel from './models/task.model';
+import conversationModel from './models/conversation.model';
+import messageModel from './models/message.model';
 import { setupAssociations } from '@/association/index';
 
 import {
@@ -163,6 +167,10 @@ const UserTests = userTestModel(sequelize);
 const UserFeedbacks = userFeedbackModel(sequelize);
 const TrustscoreHistory = trustscoreHistoryModel(sequelize);
 const AcademicRecords = academicRecordModel(sequelize);
+const Sessions = sessionModel(sequelize);
+const Tasks = taskModel(sequelize);
+const Conversations = conversationModel(sequelize);
+const Messages = messageModel(sequelize);
 
 // Apply Associations
 setupAssociations();
@@ -898,6 +906,10 @@ export const DB = {
     UserFeedbacks,
     TrustscoreHistory,
     AcademicRecords,
+    Sessions,
+    Tasks,
+    Conversations,
+    Messages,
     sequelize,
     Sequelize,
 };

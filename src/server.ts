@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import { createServer } from "http";
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -21,8 +22,11 @@ const port = process.env.PORT || 5000;
 // const corsOrigin = FRONTEND_URL || 'http://localhost:5173';
 const allowedOrigins = [
   'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:3001',
   'https://ogera-frontend.vercel.app',
-  'https://app.ogera.sybellasystems.co.rw'
+  'https://app.ogera.sybellasystems.co.rw',
+  'https://ogera.sybellasystems.co.rw',
 ];
 
 // In development we allow all origins; in production we reflect the configured frontend URL.
@@ -77,6 +81,9 @@ appServer.use(cookieParser());
 appServer.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 appServer.use('/api', apiLimiter);
+
+// Serve uploaded files
+appServer.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // API routes
 appServer.use('/api', router);

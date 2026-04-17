@@ -28,6 +28,10 @@ import { ProblemPuzzleQuestionModel } from '@/database/models/problemPuzzleQuest
 import { UserFeedbackModel } from '@/database/models/userFeedback.model';
 import { TrustscoreHistoryModel } from '@/database/models/trustscoreHistory.model';
 import { AcademicRecordModel } from '@/database/models/academicRecord.model';
+import { SessionModel } from '@/database/models/session.model';
+import { TaskModel } from '@/database/models/task.model';
+import { ConversationModel } from '@/database/models/conversation.model';
+import { MessageModel } from '@/database/models/message.model';
 
 export const setupAssociations = () => {
     // ====================== USER ↔ ROLE ======================
@@ -644,6 +648,143 @@ export const setupAssociations = () => {
     DisputeTimelineModel.belongsTo(UserModel, {
         foreignKey: 'performed_by',
         as: 'performer',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    // ====================== USER ↔ SESSION ======================
+    UserModel.hasMany(SessionModel, {
+        foreignKey: 'user_id',
+        as: 'sessions',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    SessionModel.belongsTo(UserModel, {
+        foreignKey: 'user_id',
+        as: 'user',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    // ====================== JOB TASKS ======================
+    JobModel.hasMany(TaskModel, {
+        foreignKey: 'job_id',
+        as: 'tasks',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    TaskModel.belongsTo(JobModel, {
+        foreignKey: 'job_id',
+        as: 'job',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    UserModel.hasMany(TaskModel, {
+        foreignKey: 'assigned_student_id',
+        as: 'assignedTasks',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    TaskModel.belongsTo(UserModel, {
+        foreignKey: 'assigned_student_id',
+        as: 'assignedStudent',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    // ====================== CONVERSATIONS ======================
+    // A conversation belongs to a job
+    JobModel.hasMany(ConversationModel, {
+        foreignKey: 'job_id',
+        as: 'conversations',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    ConversationModel.belongsTo(JobModel, {
+        foreignKey: 'job_id',
+        as: 'job',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    // A conversation belongs to an employer (User)
+    UserModel.hasMany(ConversationModel, {
+        foreignKey: 'employer_id',
+        as: 'employerConversations',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    ConversationModel.belongsTo(UserModel, {
+        foreignKey: 'employer_id',
+        as: 'employer',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    // A conversation belongs to a student (User)
+    UserModel.hasMany(ConversationModel, {
+        foreignKey: 'student_id',
+        as: 'studentConversations',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    ConversationModel.belongsTo(UserModel, {
+        foreignKey: 'student_id',
+        as: 'student',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    // ====================== MESSAGES ======================
+    // A conversation has many messages
+    ConversationModel.hasMany(MessageModel, {
+        foreignKey: 'conversation_id',
+        as: 'messages',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    // A message belongs to a conversation
+    MessageModel.belongsTo(ConversationModel, {
+        foreignKey: 'conversation_id',
+        as: 'conversation',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    // A message is sent by a user (sender)
+    UserModel.hasMany(MessageModel, {
+        foreignKey: 'sender_id',
+        as: 'sentMessages',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    MessageModel.belongsTo(UserModel, {
+        foreignKey: 'sender_id',
+        as: 'sender',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    // A message is received by a user (receiver)
+    UserModel.hasMany(MessageModel, {
+        foreignKey: 'receiver_id',
+        as: 'receivedMessages',
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE',
+    });
+
+    MessageModel.belongsTo(UserModel, {
+        foreignKey: 'receiver_id',
+        as: 'receiver',
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE',
     });
