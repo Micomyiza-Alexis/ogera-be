@@ -64,7 +64,7 @@ export const getCognitiveTestAdmin = async (
     next: NextFunction,
 ): Promise<void> => {
     try {
-        const data = await getCognitiveTestAdminService(req.params.id);
+        const data = await getCognitiveTestAdminService(req.params.id as string);
         response.response(res, true, StatusCodes.OK, data as any, 'OK');
     } catch (error: any) {
         response.errorResponse(
@@ -82,7 +82,7 @@ export const updateCognitiveTest = async (
     next: NextFunction,
 ): Promise<void> => {
     try {
-        const data = await updateCognitiveTestService(req.params.id, req.body);
+        const data = await updateCognitiveTestService(req.params.id as string, req.body);
         response.response(res, true, StatusCodes.OK, data as any, 'Updated');
     } catch (error: any) {
         response.errorResponse(
@@ -100,7 +100,7 @@ export const deleteCognitiveTest = async (
     next: NextFunction,
 ): Promise<void> => {
     try {
-        const data = await deleteCognitiveTestService(req.params.id);
+        const data = await deleteCognitiveTestService(req.params.id as string);
         response.response(res, true, StatusCodes.OK, data as any, 'Deleted');
     } catch (error: any) {
         response.errorResponse(
@@ -118,7 +118,7 @@ export const addQuestion = async (
     next: NextFunction,
 ): Promise<void> => {
     try {
-        const data = await addQuestionService(req.params.id, req.body);
+        const data = await addQuestionService(req.params.id as string, req.body);
         response.response(res, true, StatusCodes.OK, data as any, 'Question added');
     } catch (error: any) {
         response.errorResponse(
@@ -137,8 +137,8 @@ export const updateQuestion = async (
 ): Promise<void> => {
     try {
         const data = await updateQuestionService(
-            req.params.id,
-            req.params.questionId,
+            req.params.id as string,
+            req.params.questionId as string,
             req.body,
         );
         response.response(res, true, StatusCodes.OK, data as any, 'Question updated');
@@ -158,7 +158,7 @@ export const deleteQuestion = async (
     next: NextFunction,
 ): Promise<void> => {
     try {
-        const data = await deleteQuestionService(req.params.id, req.params.questionId);
+        const data = await deleteQuestionService(req.params.id as string, req.params.questionId as string);
         response.response(res, true, StatusCodes.OK, data as any, 'Question deleted');
     } catch (error: any) {
         response.errorResponse(
@@ -194,7 +194,7 @@ export const getPublishedTestForAttempt = async (
     next: NextFunction,
 ): Promise<void> => {
     try {
-        const data = await getPublishedTestForAttemptService(req.params.id);
+        const data = await getPublishedTestForAttemptService(req.params.id as string);
         response.response(res, true, StatusCodes.OK, data as any, 'OK');
     } catch (error: any) {
         response.errorResponse(
@@ -223,7 +223,7 @@ export const submitCognitiveAttempt = async (
         }
         const data = await submitCognitiveAttemptService(
             req.user.user_id,
-            req.params.id,
+            req.params.id as string,
             answers,
         );
         response.response(res, true, StatusCodes.OK, data as any, 'Attempt recorded');

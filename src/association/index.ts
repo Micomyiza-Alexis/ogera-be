@@ -781,3 +781,4 @@ MessageModel.belongsTo(UserModel, {
     onUpdate: 'CASCADE',
     onDelete: 'CASCADE',
 });
+}

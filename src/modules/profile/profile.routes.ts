@@ -32,19 +32,14 @@ import {
     // Extended Profile
     getExtendedProfile,
     updateExtendedProfile,
-
     // Full Profile
     getFullProfile,
     getOtherUserFullProfile,
-    } from './profile.controller';
     // Profile Image & Completion
     uploadProfileImage,
     getProfileCompletion,
     updateProfileImageUrl,
-
-    // Other User Profile
-    getOtherUserFullProfile,
-    } from './profile.controller';
+} from './profile.controller';
 const router = Router();
 
 const upload = multer({

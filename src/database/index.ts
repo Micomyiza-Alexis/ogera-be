@@ -160,7 +160,6 @@ const DisputeEvidence = disputeEvidenceModel(sequelize);
 const DisputeMessages = disputeMessageModel(sequelize);
 const DisputeTimeline = disputeTimelineModel(sequelize);
 const Sessions = sessionModel(sequelize);
-
 const CognitiveTests = cognitiveTestModel(sequelize);
 const CognitiveQuestions = cognitiveQuestionModel(sequelize);
 const ProblemMetrics = problemMetricModel(sequelize);
@@ -169,7 +168,6 @@ const UserTests = userTestModel(sequelize);
 const UserFeedbacks = userFeedbackModel(sequelize);
 const TrustscoreHistory = trustscoreHistoryModel(sequelize);
 const AcademicRecords = academicRecordModel(sequelize);
-const Sessions = sessionModel(sequelize);
 const Tasks = taskModel(sequelize);
 const Conversations = conversationModel(sequelize);
 const Messages = messageModel(sequelize);
