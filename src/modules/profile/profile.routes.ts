@@ -34,14 +34,12 @@ import {
     updateExtendedProfile,
     // Full Profile
     getFullProfile,
+    getOtherUserFullProfile,
     // Profile Image & Completion
     uploadProfileImage,
     getProfileCompletion,
     updateProfileImageUrl,
-    // Other User Profile
-    getOtherUserFullProfile,
 } from './profile.controller';
-
 const router = Router();
 
 const upload = multer({
@@ -66,7 +64,6 @@ router.get('/completion', getProfileCompletion);
 // ====================== PROFILE IMAGE ======================
 router.post('/upload-image', upload.single('profile_image'), uploadProfileImage);
 router.put('/image', updateProfileImageUrl);
-
 // ====================== EXTENDED PROFILE ======================
 router.get('/extended', getExtendedProfile);
 router.put('/extended', updateExtendedProfile);

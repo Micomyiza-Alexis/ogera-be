@@ -64,7 +64,7 @@ export const getProblemMetricAdmin = async (
     _next: NextFunction,
 ): Promise<void> => {
     try {
-        const data = await getProblemMetricAdminService(req.params.id);
+        const data = await getProblemMetricAdminService(req.params.id as string);
         response.response(res, true, StatusCodes.OK, data as any, 'OK');
     } catch (error: any) {
         response.errorResponse(
@@ -82,7 +82,7 @@ export const updateProblemMetric = async (
     _next: NextFunction,
 ): Promise<void> => {
     try {
-        const data = await updateProblemMetricService(req.params.id, req.body);
+        const data = await updateProblemMetricService(req.params.id as string, req.body);
         response.response(res, true, StatusCodes.OK, data as any, 'Updated');
     } catch (error: any) {
         response.errorResponse(
@@ -100,7 +100,7 @@ export const deleteProblemMetric = async (
     _next: NextFunction,
 ): Promise<void> => {
     try {
-        const data = await deleteProblemMetricService(req.params.id);
+        const data = await deleteProblemMetricService(req.params.id as string);
         response.response(res, true, StatusCodes.OK, data as any, 'Deleted');
     } catch (error: any) {
         response.errorResponse(
@@ -118,7 +118,7 @@ export const addProblemMetricQuestion = async (
     _next: NextFunction,
 ): Promise<void> => {
     try {
-        const data = await addProblemMetricQuestionService(req.params.id, req.body);
+        const data = await addProblemMetricQuestionService(req.params.id as string, req.body);
         response.response(res, true, StatusCodes.OK, data as any, 'Question added');
     } catch (error: any) {
         response.errorResponse(
@@ -137,8 +137,8 @@ export const updateProblemMetricQuestion = async (
 ): Promise<void> => {
     try {
         const data = await updateProblemMetricQuestionService(
-            req.params.id,
-            req.params.questionId,
+            req.params.id as string,
+            req.params.questionId as string,
             req.body,
         );
         response.response(res, true, StatusCodes.OK, data as any, 'Question updated');
@@ -158,7 +158,7 @@ export const deleteProblemMetricQuestion = async (
     _next: NextFunction,
 ): Promise<void> => {
     try {
-        const data = await deleteProblemMetricQuestionService(req.params.id, req.params.questionId);
+        const data = await deleteProblemMetricQuestionService(req.params.id as string, req.params.questionId as string);
         response.response(res, true, StatusCodes.OK, data as any, 'Question deleted');
     } catch (error: any) {
         response.errorResponse(
@@ -194,7 +194,7 @@ export const getPublishedProblemMetricForAttempt = async (
     _next: NextFunction,
 ): Promise<void> => {
     try {
-        const data = await getPublishedProblemMetricForAttemptService(req.params.id);
+        const data = await getPublishedProblemMetricForAttemptService(req.params.id as string);
         response.response(res, true, StatusCodes.OK, data as any, 'OK');
     } catch (error: any) {
         response.errorResponse(
@@ -221,7 +221,7 @@ export const submitProblemMetricAttempt = async (
             response.errorResponse(res, StatusCodes.BAD_REQUEST, false, 'answers object required');
             return;
         }
-        const data = await submitProblemMetricAttemptService(req.user.user_id, req.params.id, answers);
+        const data = await submitProblemMetricAttemptService(req.user.user_id, req.params.id as string, answers);
         response.response(res, true, StatusCodes.OK, data as any, 'Attempt recorded');
     } catch (error: any) {
         response.errorResponse(

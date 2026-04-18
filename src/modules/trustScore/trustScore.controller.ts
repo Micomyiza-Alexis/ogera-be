@@ -68,7 +68,7 @@ export const getUserTrustScore = async (
     res: Response,
 ): Promise<void> => {
     try {
-        const { user_id } = req.params;
+        const user_id = req.params.user_id as string;
 
         if (!user_id) {
             response.errorResponse(
@@ -107,7 +107,7 @@ export const calculateTrustScore = async (
     res: Response,
 ): Promise<void> => {
     try {
-        const { user_id } = req.params;
+        const user_id = req.params.user_id as string;
         if (!user_id) {
             response.errorResponse(
                 res,
@@ -141,7 +141,7 @@ export const getTrustHistory = async (
     res: Response,
 ): Promise<void> => {
     try {
-        const { user_id } = req.params;
+        const user_id = req.params.user_id as string;
         const limit = req.query.limit
             ? parseInt(String(req.query.limit), 10)
             : 20;

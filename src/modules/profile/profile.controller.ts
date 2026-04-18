@@ -30,6 +30,7 @@ import {
     getProfileCompletionService,
     updateProfileImageUrlService,
     getOtherUserFullProfileService,
+
 } from './profile.service';
 
 const response = new ResponseFormat();
@@ -448,6 +449,7 @@ export const getFullProfile = async (req: Request, res: Response): Promise<void>
 };
 
 // ====================== PROFILE IMAGE & COMPLETION ======================
+
 export const uploadProfileImage = async (req: Request, res: Response): Promise<void> => {
     try {
         const user_id = req.user?.user_id;
@@ -467,7 +469,6 @@ export const uploadProfileImage = async (req: Request, res: Response): Promise<v
         response.errorResponse(res, error.status || StatusCodes.INTERNAL_SERVER_ERROR, false, error.message);
     }
 };
-
 export const getProfileCompletion = async (req: Request, res: Response): Promise<void> => {
     try {
         const user_id = req.user?.user_id;
@@ -505,22 +506,20 @@ export const updateProfileImageUrl = async (req: Request, res: Response): Promis
 };
 
 // ====================== OTHER USER PROFILE ======================
+
 export const getOtherUserFullProfile = async (req: Request, res: Response): Promise<void> => {
     try {
         const userId = req.params.userId as string;
-        if (!userId) {
-            response.errorResponse(res, StatusCodes.BAD_REQUEST, false, 'User ID is required');
-            return;
-        }
 
         const fullProfile = await getOtherUserFullProfileService(userId);
+
         if (!fullProfile) {
             response.errorResponse(res, StatusCodes.NOT_FOUND, false, 'User profile not found');
             return;
         }
+
         response.response(res, true, StatusCodes.OK, fullProfile, 'User profile retrieved successfully');
     } catch (error: any) {
         response.errorResponse(res, error.status || StatusCodes.INTERNAL_SERVER_ERROR, false, error.message);
     }
 };
-

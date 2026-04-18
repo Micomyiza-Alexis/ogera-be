@@ -39,8 +39,8 @@ import sessionModel from './models/session.model';
 import taskModel from './models/task.model';
 import conversationModel from './models/conversation.model';
 import messageModel from './models/message.model';
-import { setupAssociations } from '@/association/index';
 
+import { setupAssociations } from '@/association/index';
 import {
     DB_DIALECT,
     DB_HOST,
@@ -159,6 +159,7 @@ const Disputes = disputeModel(sequelize);
 const DisputeEvidence = disputeEvidenceModel(sequelize);
 const DisputeMessages = disputeMessageModel(sequelize);
 const DisputeTimeline = disputeTimelineModel(sequelize);
+const Sessions = sessionModel(sequelize);
 const CognitiveTests = cognitiveTestModel(sequelize);
 const CognitiveQuestions = cognitiveQuestionModel(sequelize);
 const ProblemMetrics = problemMetricModel(sequelize);
@@ -167,7 +168,6 @@ const UserTests = userTestModel(sequelize);
 const UserFeedbacks = userFeedbackModel(sequelize);
 const TrustscoreHistory = trustscoreHistoryModel(sequelize);
 const AcademicRecords = academicRecordModel(sequelize);
-const Sessions = sessionModel(sequelize);
 const Tasks = taskModel(sequelize);
 const Conversations = conversationModel(sequelize);
 const Messages = messageModel(sequelize);
@@ -871,7 +871,6 @@ const ensureUserTableColumns = async () => {
         }
     }
 })();
-
 export const DB = {
     Users,
     Roles,
@@ -897,6 +896,8 @@ export const DB = {
     Disputes,
     DisputeEvidence,
     DisputeMessages,
+
+    // merged correctly
     DisputeTimeline,
     CognitiveTests,
     CognitiveQuestions,
@@ -910,6 +911,7 @@ export const DB = {
     Tasks,
     Conversations,
     Messages,
+
     sequelize,
     Sequelize,
 };
