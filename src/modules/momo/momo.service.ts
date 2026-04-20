@@ -105,8 +105,23 @@ export async function getTransactionStatus(referenceId: string): Promise<unknown
         const { DB } = await import('@/database');
         const [rows] = await DB.Jobs.update(
             { funding_status: 'Funded', momo_paid_at: new Date() },
-            { where: { momo_reference_id: referenceId } }
+            {
+                where: {
+                    momo_reference_id: referenceId,
+                    status: 'Pending',
+                },
+            }
         );
+        if (rows === 0) {
+            await DB.Jobs.update(
+                { funding_status: 'Funded', momo_paid_at: new Date() },
+                {
+                    where: {
+                        momo_reference_id: referenceId,
+                    },
+                }
+            );
+        }
         if (rows > 0) logger.info('Job marked as Funded from status check:', referenceId);
     }
     return response.data;
@@ -226,8 +241,23 @@ export async function handleCallback(body: unknown): Promise<void> {
     const { DB } = await import('@/database');
     const [rows] = await DB.Jobs.update(
         { funding_status: 'Funded', momo_paid_at: new Date() },
-        { where: { momo_reference_id: referenceId } }
+        {
+            where: {
+                momo_reference_id: referenceId,
+                status: 'Pending',
+            },
+        }
     );
+    if (rows === 0) {
+        await DB.Jobs.update(
+            { funding_status: 'Funded', momo_paid_at: new Date() },
+            {
+                where: {
+                    momo_reference_id: referenceId,
+                },
+            }
+        );
+    }
     if (rows > 0 && (status === 'SUCCESSFUL' || !status)) {
         logger.info('Job marked as Funded for reference:', referenceId);
     }
