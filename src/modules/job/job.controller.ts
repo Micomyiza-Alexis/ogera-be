@@ -81,6 +81,31 @@ export const getAllJobs = async (
     }
 };
 
+// Public jobs list for landing page (no auth required)
+export const getPublicJobs = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+) => {
+    try {
+        const jobs = await getAllJobsService('Active', undefined, undefined);
+        response.response(
+            res,
+            true,
+            StatusCodes.OK,
+            jobs,
+            'Public jobs retrieved successfully',
+        );
+    } catch (error: any) {
+        response.errorResponse(
+            res,
+            error.status || StatusCodes.INTERNAL_SERVER_ERROR,
+            false,
+            error.message,
+        );
+    }
+};
+
 // Get active jobs
 export const getActiveJobs = async (
     req: Request,
@@ -88,7 +113,9 @@ export const getActiveJobs = async (
     next: NextFunction,
 ) => {
     try {
-        const jobs = await getJobsByStatusService('Active', req.user);
+        // Public landing page should show the same Active jobs list visible in app.
+        // Use the general jobs query with status filter (no forced funded filter).
+        const jobs = await getAllJobsService('Active', undefined, req.user);
         response.response(
             res,
             true,

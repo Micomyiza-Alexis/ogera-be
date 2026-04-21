@@ -2,6 +2,7 @@ import express from 'express';
 import {
     createJob,
     getAllJobs,
+    getPublicJobs,
     getActiveJobs,
     getPendingJobs,
     getCompletedJobs,
@@ -22,6 +23,12 @@ jobRouter.get(
     authMiddleware,
     PermissionChecker('/jobs', 'view'),
     getAllJobs,
+);
+
+// Get active jobs - public endpoint for landing page
+jobRouter.get(
+    '/public',
+    getPublicJobs,
 );
 
 // Get active jobs - public endpoint for landing page
