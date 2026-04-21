@@ -6,6 +6,10 @@ export type UserExtendedProfileCreationAttributes = Optional<
     ExtendedUserProfile,
     | 'resume_headline'
     | 'profile_summary'
+    | 'company_name'
+    | 'industry_category'
+    | 'company_size'
+    | 'company_location'
     | 'total_experience_years'
     | 'total_experience_months'
     | 'current_salary'
@@ -17,6 +21,8 @@ export type UserExtendedProfileCreationAttributes = Optional<
     | 'marital_status'
     | 'languages'
     | 'social_profiles'
+    | 'website_url'
+    | 'linkedin_url'
 >;
 
 export interface ExtendedProfileWithTimestamps extends ExtendedUserProfile {
@@ -31,6 +37,10 @@ export class UserExtendedProfileModel
     public user_id!: string;
     public resume_headline?: string;
     public profile_summary?: string;
+    public company_name?: string;
+    public industry_category?: string;
+    public company_size?: string;
+    public company_location?: string;
     public total_experience_years?: number;
     public total_experience_months?: number;
     public current_salary?: number;
@@ -48,6 +58,8 @@ export class UserExtendedProfileModel
         twitter?: string;
         other?: string;
     };
+    public website_url?: string;
+    public linkedin_url?: string;
     public readonly created_at!: Date;
     public readonly updated_at!: Date;
 
@@ -74,6 +86,22 @@ export default function (sequelize: Sequelize): typeof UserExtendedProfileModel 
             },
             profile_summary: {
                 type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            company_name: {
+                type: DataTypes.STRING(255),
+                allowNull: true,
+            },
+            industry_category: {
+                type: DataTypes.STRING(255),
+                allowNull: true,
+            },
+            company_size: {
+                type: DataTypes.STRING(50),
+                allowNull: true,
+            },
+            company_location: {
+                type: DataTypes.STRING(255),
                 allowNull: true,
             },
             total_experience_years: {
@@ -124,6 +152,14 @@ export default function (sequelize: Sequelize): typeof UserExtendedProfileModel 
                 type: DataTypes.JSON,
                 allowNull: true,
                 defaultValue: {},
+            },
+            website_url: {
+                type: DataTypes.STRING(500),
+                allowNull: true,
+            },
+            linkedin_url: {
+                type: DataTypes.STRING(500),
+                allowNull: true,
             },
             created_at: {
                 type: DataTypes.DATE,

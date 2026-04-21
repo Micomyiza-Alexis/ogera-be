@@ -1221,6 +1221,7 @@ export const updateProfileService = async (
         full_name?: string;
         email?: string;
         mobile_number?: string;
+        country_code?: string;
         national_id_number?: string;
         business_registration_id?: string;
         resume_url?: string;
@@ -1250,6 +1251,7 @@ export const updateProfileService = async (
     }
     // If mobile number is being updated, reset phone verification
     const phoneChanged = data.mobile_number && data.mobile_number !== user.mobile_number;
+    const countryChanged = data.country_code !== undefined && data.country_code !== user.country_code;
     if (phoneChanged) {
         updateData.mobile_number = data.mobile_number;
         updateData.phone_verified = false;
@@ -1257,6 +1259,14 @@ export const updateProfileService = async (
         updateData.phone_verification_otp_expiry = null;
     } else if (data.mobile_number !== undefined) {
         updateData.mobile_number = data.mobile_number;
+    }
+    if (data.country_code !== undefined) {
+        updateData.country_code = data.country_code;
+    }
+    if (countryChanged) {
+        updateData.phone_verified = false;
+        updateData.phone_verification_otp = null;
+        updateData.phone_verification_otp_expiry = null;
     }
     if (data.national_id_number !== undefined)
         updateData.national_id_number = data.national_id_number;

@@ -85,6 +85,10 @@ export interface ExtendedUserProfile {
     user_id: string;
     resume_headline?: string;
     profile_summary?: string;
+    company_name?: string;
+    industry_category?: string;
+    company_size?: string;
+    company_location?: string;
     total_experience_years?: number;
     total_experience_months?: number;
     current_salary?: number;
@@ -102,6 +106,8 @@ export interface ExtendedUserProfile {
         twitter?: string;
         other?: string;
     };
+    website_url?: string;
+    linkedin_url?: string;
 }
 
 // ====================== API REQUEST/RESPONSE TYPES ======================
@@ -165,6 +171,10 @@ export interface CreateAccomplishmentRequest {
 export interface UpdateExtendedProfileRequest {
     resume_headline?: string;
     profile_summary?: string;
+    company_name?: string;
+    industry_category?: string;
+    company_size?: string;
+    company_location?: string;
     total_experience_years?: number;
     total_experience_months?: number;
     current_salary?: number;
@@ -182,6 +192,20 @@ export interface UpdateExtendedProfileRequest {
         twitter?: string;
         other?: string;
     };
+    website_url?: string;
+    linkedin_url?: string;
+}
+
+export interface UpdateCompanyInfoRequest {
+    company_name?: string;
+    industry_category?: string;
+    company_size?: string;
+    company_location?: string;
+}
+
+export interface UpdateOnlinePresenceRequest {
+    website?: string;
+    linkedin?: string;
 }
 
 // ====================== BULK OPERATIONS ======================

@@ -13,6 +13,8 @@ import {
     CreateProjectRequest,
     CreateAccomplishmentRequest,
     UpdateExtendedProfileRequest,
+    UpdateCompanyInfoRequest,
+    UpdateOnlinePresenceRequest,
 } from '@/interfaces/profile.interfaces';
 
 async function refreshTrustScoreAfterProfileChange(user_id: string): Promise<void> {
@@ -257,9 +259,74 @@ export const getExtendedProfileService = async (user_id: string) => {
 };
 
 export const updateExtendedProfileService = async (user_id: string, data: UpdateExtendedProfileRequest) => {
+    // DEBUG LOG: Log data being sent to repository
+    console.log('[SERVICE] updateExtendedProfileService - Data received:', JSON.stringify(data, null, 2));
+    
     const extendedProfile = await repo.createOrUpdateExtendedProfile(user_id, data);
+    
+    // DEBUG LOG: Log result from repository
+    console.log('[SERVICE] updateExtendedProfileService - Result from DB:', extendedProfile);
+    
     await refreshTrustScoreAfterProfileChange(user_id);
     return extendedProfile;
+};
+
+export const updateCompanyInfoService = async (user_id: string, data: UpdateCompanyInfoRequest) => {
+    // DEBUG LOG: Log data being sent to repository
+    console.log('[SERVICE] updateCompanyInfoService - Data received:', JSON.stringify(data, null, 2));
+    
+    try {
+        const companyProfile = await repo.updateCompanyInfo(user_id, data);
+
+        // DEBUG LOG: Log result from repository
+        console.log('[SERVICE] updateCompanyInfoService - Result from DB:', companyProfile);
+
+        if (!companyProfile) {
+            logger.warn(`WARNING: No row updated for user_id: ${user_id}`);
+            return null;
+        }
+
+        await refreshTrustScoreAfterProfileChange(user_id);
+        return companyProfile;
+    } catch (error: any) {
+        logger.error(
+            `Failed to save company information for ${user_id}: ${error?.message || error}`,
+        );
+        if (error instanceof CustomError) {
+            throw error;
+        }
+        throw new CustomError('Failed to save company information', StatusCodes.INTERNAL_SERVER_ERROR);
+    }
+};
+
+// ====================== ONLINE PRESENCE ======================
+export const updateOnlinePresenceService = async (user_id: string, data: UpdateOnlinePresenceRequest) => {
+    // DEBUG LOG: Log data being sent to repository
+    console.log('[SERVICE] updateOnlinePresenceService - Data received:', JSON.stringify(data, null, 2));
+
+    try {
+        const result = await repo.updateOnlinePresence(user_id, data);
+
+        // DEBUG LOG: Log result from repository
+        console.log('[SERVICE] updateOnlinePresenceService - Result from DB:', result);
+
+        if (!result) {
+            logger.warn(`WARNING: No row updated for user_id: ${user_id}`);
+            return null;
+        }
+
+        // Refresh trust score after successful update
+        await refreshTrustScoreAfterProfileChange(user_id);
+        return result;
+    } catch (error: any) {
+        logger.error(
+            `Failed to save online presence for ${user_id}: ${error?.message || error}`,
+        );
+        if (error instanceof CustomError) {
+            throw error;
+        }
+        throw new CustomError('Failed to save online presence', StatusCodes.INTERNAL_SERVER_ERROR);
+    }
 };
 
 // ====================== FULL PROFILE ======================

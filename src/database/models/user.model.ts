@@ -43,6 +43,7 @@ export class UserModel
     public user_id!: string;
     public email!: string;
     public mobile_number!: string;
+    public country_code?: string;
     public password_hash!: string;
 
     public role_id!: string;
@@ -130,6 +131,11 @@ export default function (sequelize: Sequelize): typeof UserModel {
             mobile_number: {
                 type: DataTypes.STRING(15),
                 allowNull: false,
+            },
+
+            country_code: {
+                type: DataTypes.STRING(10),
+                allowNull: true,
             },
 
             password_hash: {
