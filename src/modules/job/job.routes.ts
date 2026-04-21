@@ -2,11 +2,13 @@ import express from 'express';
 import {
     createJob,
     getAllJobs,
+    getPublicJobs,
     getActiveJobs,
     getPendingJobs,
     getCompletedJobs,
     getJobById,
     updateJob,
+    reviewJob,
     deleteJob,
     toggleJobStatus,
 } from './job.controller';
@@ -21,6 +23,12 @@ jobRouter.get(
     authMiddleware,
     PermissionChecker('/jobs', 'view'),
     getAllJobs,
+);
+
+// Get active jobs - public endpoint for landing page
+jobRouter.get(
+    '/public',
+    getPublicJobs,
 );
 
 // Get active jobs - public endpoint for landing page
@@ -65,6 +73,14 @@ jobRouter.put(
     authMiddleware,
     PermissionChecker('/jobs', 'edit'),
     updateJob,
+);
+
+// Review job (Approve/Disapprove) — only admin/superadmin enforced in service.
+// No permission_json gate here to avoid blocking built-in admins.
+jobRouter.patch(
+    '/:id/review',
+    authMiddleware,
+    reviewJob,
 );
 
 // Delete job — service enforces: admin/superadmin can delete any job,
