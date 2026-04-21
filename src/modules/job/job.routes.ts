@@ -7,6 +7,7 @@ import {
     getCompletedJobs,
     getJobById,
     updateJob,
+    reviewJob,
     deleteJob,
     toggleJobStatus,
 } from './job.controller';
@@ -65,6 +66,14 @@ jobRouter.put(
     authMiddleware,
     PermissionChecker('/jobs', 'edit'),
     updateJob,
+);
+
+// Review job (Approve/Disapprove) — only admin/superadmin enforced in service.
+// No permission_json gate here to avoid blocking built-in admins.
+jobRouter.patch(
+    '/:id/review',
+    authMiddleware,
+    reviewJob,
 );
 
 // Delete job — service enforces: admin/superadmin can delete any job,

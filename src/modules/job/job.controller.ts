@@ -8,6 +8,7 @@ import {
     getJobsByStatusService,
     getJobByIdService,
     updateJobService,
+    reviewJobService,
     deleteJobService,
     toggleJobStatusService,
 } from './job.service';
@@ -165,13 +166,13 @@ export const getJobById = async (
         const rawJob = job && typeof job.get === 'function' ? job.get({ plain: true }) : job;
         const jobData = rawJob as unknown as Record<string, unknown>;
         const userRole = req.user?.role ? String(req.user.role).toLowerCase().trim() : '';
-        const fundingStatus = String(jobData?.funding_status || '');
-        if (userRole === 'student' && fundingStatus !== 'Funded' && fundingStatus !== 'Paid') {
+        const jobStatus = String(jobData?.status || '');
+        if (userRole === 'student' && jobStatus !== 'Active') {
             response.errorResponse(
                 res,
                 StatusCodes.FORBIDDEN,
                 false,
-                'This job is not funded yet and is not visible to students.',
+                'This job has not been approved yet and is not visible to students.',
             );
             return;
         }
@@ -219,6 +220,54 @@ export const updateJob = async (
             StatusCodes.OK,
             job,
             Messages.Job.UPDATE_JOB,
+        );
+    } catch (error: any) {
+        response.errorResponse(
+            res,
+            error.status || StatusCodes.BAD_REQUEST,
+            false,
+            error.message,
+        );
+    }
+};
+
+export const reviewJob = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+) => {
+    try {
+        if (!req.user) {
+            response.errorResponse(
+                res,
+                StatusCodes.UNAUTHORIZED,
+                false,
+                'User not authenticated',
+            );
+            return;
+        }
+        const status = req.body?.status as 'Active' | 'Inactive';
+        if (status !== 'Active' && status !== 'Inactive') {
+            response.errorResponse(
+                res,
+                StatusCodes.BAD_REQUEST,
+                false,
+                'Review status must be Active or Inactive',
+            );
+            return;
+        }
+        const job = await reviewJobService(
+            req.params.id as string,
+            req.user.user_id,
+            req.user.role,
+            status,
+        );
+        response.response(
+            res,
+            true,
+            StatusCodes.OK,
+            job,
+            'Job reviewed successfully',
         );
     } catch (error: any) {
         response.errorResponse(

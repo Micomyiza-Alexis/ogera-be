@@ -5,6 +5,7 @@ export interface Job {
   applications: number;
   category: string;
   budget: number;
+  currency?: string;
   duration: string;
   location: string;
   description?: string;

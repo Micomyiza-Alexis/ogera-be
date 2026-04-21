@@ -67,6 +67,9 @@ export const createJobService = async (
     if (!jobData.budget) {
         throw new CustomError('Budget is required', StatusCodes.BAD_REQUEST);
     }
+    if (!jobData.currency || !String(jobData.currency).trim()) {
+        jobData.currency = 'USD';
+    }
     if (!jobData.duration) {
         throw new CustomError('Duration is required', StatusCodes.BAD_REQUEST);
     }
@@ -92,10 +95,9 @@ export const createJobService = async (
     const jobPayload = {
         employer_id,
         ...jobPayloadData,
-        // New jobs go live immediately so they appear on the landing page without
-        // needing manual admin approval. Admins can still move a job to Inactive
-        // from the pending/approval screens if they need to intervene.
-        status: jobPayloadData.status || 'Active',
+        // Employers must be approved by admin/superadmin before publication.
+        // Superadmins can still choose an explicit status when creating.
+        status: roleType === 'employer' ? 'Pending' : jobPayloadData.status || 'Pending',
     };
 
     const job = await repo.createJob(jobPayload);
@@ -136,15 +138,16 @@ export const getAllJobsService = async (
     const fundedFilter =
         funded === 'true' ? true : funded === 'false' ? false : undefined;
 
-    // Students should only ever see funded jobs.
+    // Students should see only admin-approved/published jobs.
+    // Funding is NOT required for visibility.
     if (normalizedRole === 'student') {
-        return await repo.findAllJobs(status, true);
+        return await repo.findAllJobs('Active');
     }
 
-    // Employers default to funded-only (My Jobs behavior).
-    // They can explicitly request unfunded-only with funded=false.
+    // Employers should see all their jobs by default.
+    // They can still explicitly filter funded/unfunded with funded=true/false.
     if (normalizedRole === 'employer') {
-        return await repo.findAllJobs(status, fundedFilter ?? true);
+        return await repo.findAllJobs(status, fundedFilter);
     }
 
     return await repo.findAllJobs(status, fundedFilter);
@@ -155,6 +158,11 @@ export const getJobsByStatusService = async (
     user?: { user_id: string; role: string },
 ) => {
     const normalizedRole = user?.role ? String(user.role).toLowerCase().trim() : '';
+
+    // Public/unauthenticated views should only get funded jobs.
+    if (!user) {
+        return await repo.findAllJobs(status, true);
+    }
 
     if (normalizedRole === 'student' || normalizedRole === 'employer') {
         return await repo.findAllJobs(status, true);
@@ -257,6 +265,50 @@ export const updateJobService = async (
         return updated;
 };
 
+export const reviewJobService = async (
+    job_id: string,
+    reviewerId: string,
+    reviewerRole: string,
+    nextStatus: 'Active' | 'Inactive',
+) => {
+    const role = String(reviewerRole || '').toLowerCase().trim();
+    const reviewer = await DB.Users.findOne({ where: { user_id: reviewerId } });
+    if (!reviewer) {
+        throw new CustomError('Reviewer not found', StatusCodes.NOT_FOUND);
+    }
+
+    // Allow built-in and custom admin roles (e.g. verifydocadmin, courseadmin),
+    // but never allow student/employer roles to review/publish jobs.
+    const isAdminLike =
+        role.includes('admin') &&
+        !role.includes('student') &&
+        !role.includes('employer');
+
+    if (!isAdminLike) {
+        throw new CustomError(
+            'Only admin or superadmin can review jobs',
+            StatusCodes.FORBIDDEN,
+        );
+    }
+
+    const job = await repo.findJobById(job_id);
+    if (!job) {
+        throw new CustomError(
+            Messages.Job.JOB_NOT_FOUND,
+            StatusCodes.NOT_FOUND,
+        );
+    }
+
+    const updated = await repo.updateJob(job_id, { status: nextStatus });
+    if (!updated) {
+        throw new CustomError(
+            'Failed to review job',
+            StatusCodes.INTERNAL_SERVER_ERROR,
+        );
+    }
+    return updated;
+};
+
 export const deleteJobService = async (
     job_id: string,
     user_id: string,
@@ -321,14 +373,14 @@ export const toggleJobStatusService = async (
     const roleType = user.role.roleType;
     const roleName = user.role.roleName.toLowerCase();
 
-    // Only employer and superadmin can toggle job status
-    if (
-        roleType !== 'employer' &&
-        roleType !== 'superAdmin' &&
-        roleName !== 'superadmin'
-    ) {
+    const normalizedRole = String(userRole || '').toLowerCase().trim();
+    const isAdmin = normalizedRole === 'admin' || normalizedRole === 'superadmin';
+    const isEmployer = roleType === 'employer';
+
+    // Only employer/admin/superadmin can toggle job status.
+    if (!isEmployer && !isAdmin && roleType !== 'superAdmin' && roleName !== 'superadmin') {
         throw new CustomError(
-            'Only employer and superadmin users can toggle job status',
+            'Only employer, admin, and superadmin users can toggle job status',
             StatusCodes.FORBIDDEN,
         );
     }
@@ -343,26 +395,34 @@ export const toggleJobStatusService = async (
     }
 
     // If user is employer, check if they own the job
-    if (roleType === 'employer' && job.employer_id !== user_id) {
+    if (isEmployer && job.employer_id !== user_id) {
         throw new CustomError(
             'You can only toggle status for your own jobs',
             StatusCodes.FORBIDDEN,
         );
     }
 
-    // Check if job status can be toggled (Active, Inactive, and Pending can be toggled)
-    if (
-        job.status !== 'Active' &&
-        job.status !== 'Inactive' &&
-        job.status !== 'Pending'
-    ) {
+    // Employers are NOT allowed to publish Pending jobs.
+    // Pending -> Active must be done by admin/superadmin review only.
+    if (isEmployer && job.status === 'Pending') {
+        throw new CustomError(
+            'Pending jobs must be reviewed by admin before publication',
+            StatusCodes.FORBIDDEN,
+        );
+    }
+
+    // Check if job status can be toggled
+    if (job.status !== 'Active' && job.status !== 'Inactive' && job.status !== 'Pending') {
         throw new CustomError(
             'Only Active, Inactive, or Pending jobs can have their status toggled',
             StatusCodes.BAD_REQUEST,
         );
     }
 
-    // Toggle status: Active -> Inactive, Inactive -> Active, Pending -> Active
+    // Toggle status:
+    // - Active -> Inactive
+    // - Inactive -> Active
+    // - Pending -> Active (admin/superadmin only)
     let newStatus: string;
     if (job.status === 'Active') {
         newStatus = 'Inactive';
