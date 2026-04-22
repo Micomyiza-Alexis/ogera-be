@@ -32,6 +32,8 @@ import {
     // Extended Profile
     getExtendedProfile,
     updateExtendedProfile,
+    updateCompanyInfo,
+    updateOnlinePresence,
     // Full Profile
     getFullProfile,
     getOtherUserFullProfile,
@@ -67,6 +69,8 @@ router.put('/image', updateProfileImageUrl);
 // ====================== EXTENDED PROFILE ======================
 router.get('/extended', getExtendedProfile);
 router.put('/extended', updateExtendedProfile);
+router.put('/company-info', updateCompanyInfo);
+router.put('/online-presence', updateOnlinePresence);
 
 // ====================== SKILLS ======================
 router.get('/skills', getSkills);

@@ -590,6 +590,12 @@ const ensureUserTableColumns = async () => {
         allowNull: true,
     });
 
+    // Add country_code if missing
+    await ensureColumnExists('users', 'country_code', {
+        type: Sequelize.DataTypes.STRING(10),
+        allowNull: true,
+    });
+
     // Add reset_otp if missing
     await ensureColumnExists('users', 'reset_otp', {
         type: Sequelize.DataTypes.STRING(10),

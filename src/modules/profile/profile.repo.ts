@@ -6,6 +6,8 @@ import {
     CreateProjectRequest,
     CreateAccomplishmentRequest,
     UpdateExtendedProfileRequest,
+    UpdateCompanyInfoRequest,
+    UpdateOnlinePresenceRequest,
 } from '@/interfaces/profile.interfaces';
 
 // ====================== SKILLS ======================
@@ -228,24 +230,206 @@ export const findExtendedProfileByUserId = async (user_id: string) => {
 };
 
 export const createOrUpdateExtendedProfile = async (user_id: string, data: UpdateExtendedProfileRequest) => {
-    const existing = await findExtendedProfileByUserId(user_id);
-    
     const updateData: any = { ...data };
     if (data.date_of_birth) {
         updateData.date_of_birth = new Date(data.date_of_birth);
     }
 
-    if (existing) {
-        await DB.UserExtendedProfiles.update(updateData, {
-            where: { user_id },
-        });
-        return findExtendedProfileByUserId(user_id);
-    } else {
-        return DB.UserExtendedProfiles.create({
-            user_id,
-            ...updateData,
-        });
+    // DEBUG LOG: Log values being sent to DB
+    console.log('[REPO] createOrUpdateExtendedProfile - Values being sent to DB:', {
+        user_id,
+        resume_headline: updateData.resume_headline,
+        profile_summary: updateData.profile_summary,
+        company_name: updateData.company_name,
+        industry_category: updateData.industry_category,
+        company_size: updateData.company_size,
+        company_location: updateData.company_location,
+        total_experience_years: updateData.total_experience_years,
+        total_experience_months: updateData.total_experience_months,
+        current_salary: updateData.current_salary,
+        expected_salary: updateData.expected_salary,
+        salary_currency: updateData.salary_currency,
+        notice_period: updateData.notice_period,
+        date_of_birth: updateData.date_of_birth,
+        gender: updateData.gender,
+        marital_status: updateData.marital_status,
+        languages: updateData.languages,
+        social_profiles: updateData.social_profiles,
+        website_url: updateData.website_url,
+        linkedin_url: updateData.linkedin_url,
+    });
+
+    const [rows, metadata] = await DB.sequelize.query(
+        `
+        UPDATE user_extended_profiles
+        SET
+            resume_headline = COALESCE(:resume_headline, resume_headline),
+            profile_summary = COALESCE(:profile_summary, profile_summary),
+            company_name = COALESCE(:company_name, company_name),
+            industry_category = COALESCE(:industry_category, industry_category),
+            company_size = COALESCE(:company_size, company_size),
+            company_location = COALESCE(:company_location, company_location),
+            total_experience_years = COALESCE(:total_experience_years, total_experience_years),
+            total_experience_months = COALESCE(:total_experience_months, total_experience_months),
+            current_salary = COALESCE(:current_salary, current_salary),
+            expected_salary = COALESCE(:expected_salary, expected_salary),
+            salary_currency = COALESCE(:salary_currency, salary_currency),
+            notice_period = COALESCE(:notice_period, notice_period),
+            date_of_birth = COALESCE(:date_of_birth, date_of_birth),
+            gender = COALESCE(:gender, gender),
+            marital_status = COALESCE(:marital_status, marital_status),
+            languages = COALESCE(:languages, languages),
+            social_profiles = COALESCE(:social_profiles, social_profiles),
+            website_url = COALESCE(:website_url, website_url),
+            linkedin_url = COALESCE(:linkedin_url, linkedin_url),
+            updated_at = now()
+        WHERE user_id = :user_id
+        RETURNING *;
+        `,
+        {
+            replacements: {
+                user_id,
+                resume_headline: updateData.resume_headline ?? null,
+                profile_summary: updateData.profile_summary ?? null,
+                company_name: updateData.company_name ?? null,
+                industry_category: updateData.industry_category ?? null,
+                company_size: updateData.company_size ?? null,
+                company_location: updateData.company_location ?? null,
+                total_experience_years: updateData.total_experience_years ?? null,
+                total_experience_months: updateData.total_experience_months ?? null,
+                current_salary: updateData.current_salary ?? null,
+                expected_salary: updateData.expected_salary ?? null,
+                salary_currency: updateData.salary_currency ?? null,
+                notice_period: updateData.notice_period ?? null,
+                date_of_birth: updateData.date_of_birth ?? null,
+                gender: updateData.gender ?? null,
+                marital_status: updateData.marital_status ?? null,
+                languages: updateData.languages ?? null,
+                social_profiles: updateData.social_profiles ?? null,
+                website_url: updateData.website_url ?? null,
+                linkedin_url: updateData.linkedin_url ?? null,
+            },
+        },
+    ) as any;
+
+    const rowCount = typeof metadata?.rowCount === 'number'
+        ? metadata.rowCount
+        : Array.isArray(rows)
+            ? rows.length
+            : 0;
+
+    // DEBUG LOG: Log DB result
+    console.log('[REPO] createOrUpdateExtendedProfile - DB result rowCount:', rowCount);
+    console.log('[REPO] createOrUpdateExtendedProfile - DB returned data:', rows?.[0]);
+    
+    if (rowCount === 0) {
+        console.log('[REPO] WARNING: No profile found for this user_id');
+        return null;
     }
+
+    return Array.isArray(rows) ? rows[0] : null;
+};
+
+export const updateCompanyInfo = async (user_id: string, data: UpdateCompanyInfoRequest) => {
+    // DEBUG LOG: Log values being sent to DB
+    console.log('[REPO] updateCompanyInfo - Values being sent to DB:', {
+        user_id,
+        company_name: data.company_name,
+        industry_category: data.industry_category,
+        company_size: data.company_size,
+        company_location: data.company_location,
+    });
+
+    const [rows, metadata] = await DB.sequelize.query(
+        `
+        UPDATE user_extended_profiles
+        SET
+            company_name = COALESCE(:company_name, company_name),
+            industry_category = COALESCE(:industry_category, industry_category),
+            company_size = COALESCE(:company_size, company_size),
+            company_location = COALESCE(:company_location, company_location),
+            updated_at = now()
+        WHERE user_id = :user_id
+        RETURNING *;
+        `,
+        {
+            replacements: {
+                user_id,
+                company_name: data.company_name ?? null,
+                industry_category: data.industry_category ?? null,
+                company_size: data.company_size ?? null,
+                company_location: data.company_location ?? null,
+            },
+        },
+    ) as any;
+
+    const rowCount = typeof metadata?.rowCount === 'number'
+        ? metadata.rowCount
+        : Array.isArray(rows)
+            ? rows.length
+            : 0;
+
+    // DEBUG LOG: Log DB result
+    console.log('[REPO] updateCompanyInfo - DB result rowCount:', rowCount);
+    console.log('[REPO] updateCompanyInfo - DB returned data:', rows?.[0]);
+
+    if (rowCount === 0) {
+        console.log('[REPO] WARNING: No profile found for this user_id');
+        return null;
+    }
+
+    return Array.isArray(rows) ? rows[0] : null;
+};
+
+// ====================== ONLINE PRESENCE ======================
+export const updateOnlinePresence = async (user_id: string, data: UpdateOnlinePresenceRequest) => {
+    const { website, linkedin } = data;
+
+    // DEBUG LOG: Log values being sent to DB
+    console.log('[REPO] updateOnlinePresence - Values being sent to DB:', {
+        user_id,
+        website_url: website,
+        linkedin_url: linkedin,
+    });
+
+    const query = `
+        UPDATE user_extended_profiles
+        SET
+            website_url = COALESCE(:website_url, website_url),
+            linkedin_url = COALESCE(:linkedin_url, linkedin_url),
+            updated_at = now()
+        WHERE user_id = :user_id
+        RETURNING *;
+    `;
+
+    const values = {
+        website_url: website || null,
+        linkedin_url: linkedin || null,
+        user_id,
+    };
+
+    console.log('[REPO] updateOnlinePresence - Query values:', values);
+
+    const [rows, metadata] = await DB.sequelize.query(query, {
+        replacements: values,
+    }) as any;
+
+    const rowCount = typeof metadata?.rowCount === 'number'
+        ? metadata.rowCount
+        : Array.isArray(rows)
+            ? rows.length
+            : 0;
+
+    // STRICT CHECK - Only succeed if exactly one row was updated
+    console.log('[REPO] updateOnlinePresence - DB result rowCount:', rowCount);
+    console.log('[REPO] updateOnlinePresence - DB returned data:', rows?.[0]);
+
+    if (!metadata || rowCount === 0) {
+        console.error('[REPO] UPDATE FAILED: No matching user_id or no changes applied');
+        return null;
+    }
+
+    return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
 };
 
 // ====================== FULL PROFILE ======================
@@ -312,6 +496,8 @@ export default {
     // Extended Profile
     findExtendedProfileByUserId,
     createOrUpdateExtendedProfile,
+    updateCompanyInfo,
+    updateOnlinePresence,
     // Full Profile
     getFullProfile,
 };

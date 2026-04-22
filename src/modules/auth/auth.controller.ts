@@ -884,6 +884,7 @@ export const updateProfile = async (
             full_name,
             email,
             mobile_number,
+            country_code,
             national_id_number,
             business_registration_id,
             resume_url,
@@ -896,6 +897,7 @@ export const updateProfile = async (
             !full_name &&
             !email &&
             !mobile_number &&
+            !country_code &&
             national_id_number === undefined &&
             business_registration_id === undefined &&
             resume_url === undefined &&
@@ -915,6 +917,7 @@ export const updateProfile = async (
             full_name,
             email,
             mobile_number,
+            country_code,
             national_id_number,
             business_registration_id,
             resume_url,
