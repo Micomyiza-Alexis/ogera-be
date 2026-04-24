@@ -39,6 +39,7 @@ import sessionModel from './models/session.model';
 import taskModel from './models/task.model';
 import conversationModel from './models/conversation.model';
 import messageModel from './models/message.model';
+import transactionModel from './models/transaction.model';
 
 import { setupAssociations } from '@/association/index';
 import {
@@ -171,6 +172,7 @@ const AcademicRecords = academicRecordModel(sequelize);
 const Tasks = taskModel(sequelize);
 const Conversations = conversationModel(sequelize);
 const Messages = messageModel(sequelize);
+const Transactions = transactionModel(sequelize);
 
 // Apply Associations
 setupAssociations();
@@ -917,6 +919,7 @@ export const DB = {
     Tasks,
     Conversations,
     Messages,
+    Transactions,
 
     sequelize,
     Sequelize,

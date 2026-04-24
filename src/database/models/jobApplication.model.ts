@@ -18,6 +18,7 @@ export class JobApplicationModel
   public status!: "Pending" | "Accepted" | "Rejected";
   public cover_letter?: string;
   public resume_url?: string;
+  public preferred_payout_currency?: string;
   public applied_at!: Date;
   public completed_at?: Date;
   public reviewed_at?: Date;
@@ -68,6 +69,10 @@ export default function (sequelize: Sequelize): typeof JobApplicationModel {
       },
       resume_url: {
         type: DataTypes.STRING(500),
+        allowNull: true,
+      },
+      preferred_payout_currency: {
+        type: DataTypes.STRING(10),
         allowNull: true,
       },
       applied_at: {
