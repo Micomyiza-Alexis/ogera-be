@@ -7,6 +7,7 @@ import {
     getInvoiceStatus,
     fundJob,
     listJobPayments,
+    getJobPaymentDetail,
     getWalletBalance,
     approveWorkAndPay,
     getDisbursementStatus,
@@ -25,6 +26,9 @@ momoRouter.post('/fund-job', authMiddleware, fundJob);
 
 // Admin: employer payments / job funding status (includes Paid)
 momoRouter.get('/admin/payments', authMiddleware, adminOrSuperadminOnly, listJobPayments);
+
+// Employer/Admin: detailed payment + conversion breakdown for one job
+momoRouter.get('/job/:jobId/payment-detail', authMiddleware, getJobPaymentDetail);
 
 // Admin: Ogera wallet balance (disbursement account total)
 momoRouter.get('/admin/wallet-balance', authMiddleware, adminOrSuperadminOnly, getWalletBalance);

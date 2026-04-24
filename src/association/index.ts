@@ -32,6 +32,7 @@ import { SessionModel } from '@/database/models/session.model';
 import { TaskModel } from '@/database/models/task.model';
 import { ConversationModel } from '@/database/models/conversation.model';
 import { MessageModel } from '@/database/models/message.model';
+import { TransactionModel } from '@/database/models/transaction.model';
 
 export const setupAssociations = () => {
     // ====================== USER ↔ ROLE ======================
@@ -60,6 +61,27 @@ export const setupAssociations = () => {
     JobModel.belongsTo(UserModel, {
         foreignKey: 'employer_id',
         as: 'employer',
+    });
+
+    // ====================== JOB/USER ↔ TRANSACTIONS ======================
+    JobModel.hasMany(TransactionModel, {
+        foreignKey: 'job_id',
+        as: 'transactions',
+    });
+
+    TransactionModel.belongsTo(JobModel, {
+        foreignKey: 'job_id',
+        as: 'job',
+    });
+
+    UserModel.hasMany(TransactionModel, {
+        foreignKey: 'user_id',
+        as: 'transactions',
+    });
+
+    TransactionModel.belongsTo(UserModel, {
+        foreignKey: 'user_id',
+        as: 'user',
     });
 
     // ====================== JOB APPLICATION ↔ JOB ======================

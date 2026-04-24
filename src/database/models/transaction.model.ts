@@ -1,8 +1,9 @@
-import { Sequelize, DataTypes } from 'sequelize';
+import { Sequelize, DataTypes, Model } from 'sequelize';
+
+export class TransactionModel extends Model {}
 
 export default (sequelize: Sequelize) => {
-  const Transactions = sequelize.define(
-    'transactions',
+  TransactionModel.init(
     {
       id: {
         type: DataTypes.UUID,
@@ -32,6 +33,47 @@ export default (sequelize: Sequelize) => {
         type: DataTypes.TEXT,
         allowNull: true,
       },
+      job_id: {
+        type: DataTypes.UUID,
+        allowNull: true,
+      },
+      reference_id: {
+        type: DataTypes.STRING(128),
+        allowNull: true,
+      },
+      original_amount: {
+        type: DataTypes.DECIMAL(18, 6),
+        allowNull: true,
+      },
+      original_currency: {
+        type: DataTypes.STRING(10),
+        allowNull: true,
+      },
+      converted_amount: {
+        type: DataTypes.DECIMAL(18, 6),
+        allowNull: true,
+      },
+      converted_currency: {
+        type: DataTypes.STRING(10),
+        allowNull: true,
+      },
+      exchange_rate: {
+        type: DataTypes.DECIMAL(20, 10),
+        allowNull: true,
+      },
+      fx_timestamp: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
+      fx_provider: {
+        type: DataTypes.STRING(50),
+        allowNull: true,
+        defaultValue: 'fxapi.app',
+      },
+      metadata: {
+        type: DataTypes.JSON,
+        allowNull: true,
+      },
       created_at: {
         type: DataTypes.DATE,
         allowNull: false,
@@ -44,13 +86,15 @@ export default (sequelize: Sequelize) => {
       },
     },
     {
+      tableName: 'transactions',
+      sequelize,
       timestamps: false,
       underscored: true,
       freezeTableName: true,
     },
   );
 
-  return Transactions;
+  return TransactionModel;
 };
 
 // After-create hook: log transaction creation to activity_logs for audit

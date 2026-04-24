@@ -2,9 +2,14 @@ import axios, { AxiosError } from 'axios';
 import { randomUUID } from 'crypto';
 import { MOMO_CONFIG, MOMO_DISBURSEMENT_CONFIG } from '@/config';
 import logger from '@/utils/logger';
+import { convertCurrency } from '@/utils/fx.service';
 
-const { baseUrl, subscriptionKey, apiUserId, apiKey, targetEnvironment, serviceFeePercent, currency: defaultCurrency } = MOMO_CONFIG;
+const { baseUrl, subscriptionKey, apiUserId, apiKey, targetEnvironment, currency: defaultCurrency } = MOMO_CONFIG;
 const dispConfig = MOMO_DISBURSEMENT_CONFIG;
+const OGERA_WALLET_CURRENCY = (process.env.OGERA_WALLET_CURRENCY || 'USD')
+    .trim()
+    .toUpperCase();
+const STUDENT_SHARE_PERCENT = Number(process.env.STUDENT_SHARE_PERCENT || '90');
 
 let cachedAccessToken: string | null = null;
 
@@ -55,6 +60,85 @@ async function ensureToken(): Promise<string> {
     return getAccessToken();
 }
 
+async function withCollectionTokenRetry<T>(
+    operation: () => Promise<T>,
+    options?: { forceRefresh?: boolean },
+): Promise<T> {
+    if (options?.forceRefresh) {
+        cachedAccessToken = null;
+    }
+    await ensureToken();
+    try {
+        return await operation();
+    } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+            // Token expired/invalid in sandbox or production. Refresh once and retry.
+            cachedAccessToken = null;
+            await getAccessToken();
+            return await operation();
+        }
+        throw error;
+    }
+}
+
+async function createTransactionEntry(payload: Record<string, unknown>): Promise<void> {
+    const { DB } = await import('@/database');
+    if (!DB.Transactions) return;
+    await DB.Transactions.create(payload as any);
+}
+
+async function settleJobFunding(referenceId: string): Promise<void> {
+    const { DB } = await import('@/database');
+    const job = (await DB.Jobs.findOne({
+        where: { momo_reference_id: referenceId },
+        attributes: ['job_id', 'job_title', 'budget', 'currency', 'employer_id', 'funding_status'],
+    })) as any;
+    if (!job) return;
+
+    const alreadyLogged = await DB.Transactions.findOne({
+        where: { reference_id: referenceId, type: 'JOB_FUNDING_CREDIT' },
+    });
+
+    if (!alreadyLogged) {
+        const sourceCurrency = String(job.currency || defaultCurrency || 'USD').toUpperCase();
+        const sourceAmount = Number(job.budget) || 0;
+        const fundingFx = await convertCurrency(
+            sourceAmount,
+            sourceCurrency,
+            OGERA_WALLET_CURRENCY,
+        );
+
+        await createTransactionEntry({
+            user_id: job.employer_id,
+            job_id: job.job_id,
+            amount: sourceAmount,
+            currency: sourceCurrency,
+            type: 'JOB_FUNDING_CREDIT',
+            reference_id: referenceId,
+            original_amount: sourceAmount,
+            original_currency: sourceCurrency,
+            converted_amount: fundingFx.convertedAmount,
+            converted_currency: OGERA_WALLET_CURRENCY,
+            exchange_rate: fundingFx.rate,
+            fx_timestamp: fundingFx.timestamp ? new Date(fundingFx.timestamp) : null,
+            metadata: {
+                stage: 'EMPLOYER_FUNDING',
+                wallet_currency: OGERA_WALLET_CURRENCY,
+                job_title: job.job_title,
+                fx_provider: 'fxapi.app',
+            },
+            description: `Employer funded job ${job.job_id} in ${sourceCurrency}; credited wallet in ${OGERA_WALLET_CURRENCY}.`,
+        });
+    }
+
+    if (job.funding_status !== 'Funded') {
+        await DB.Jobs.update(
+            { funding_status: 'Funded', momo_paid_at: new Date() },
+            { where: { job_id: job.job_id } },
+        );
+    }
+}
+
 export interface RequestToPayPayload {
     amount: string;
     currency: string;
@@ -68,25 +152,26 @@ export interface RequestToPayPayload {
  * Request to Pay (Collections) - initiate payment request to payer's MoMo wallet.
  */
 export async function requestToPay(payload: RequestToPayPayload): Promise<{ referenceId: string }> {
-    await ensureToken();
     const referenceId = randomUUID();
-    await axios.post(
-        `${baseUrl}/collection/v1_0/requesttopay`,
-        {
-            amount: payload.amount,
-            currency: payload.currency,
-            externalId: payload.externalId,
-            payer: payload.payer,
-            payerMessage: payload.payerMessage ?? 'Ogera payment',
-            payeeNote: payload.payeeNote ?? 'Ogera job payment',
-        },
-        {
-            headers: {
-                ...getHeaders(true),
-                'X-Reference-Id': referenceId,
+    await withCollectionTokenRetry(async () => {
+        await axios.post(
+            `${baseUrl}/collection/v1_0/requesttopay`,
+            {
+                amount: payload.amount,
+                currency: payload.currency,
+                externalId: payload.externalId,
+                payer: payload.payer,
+                payerMessage: payload.payerMessage ?? 'Ogera payment',
+                payeeNote: payload.payeeNote ?? 'Ogera job payment',
             },
-        }
-    );
+            {
+                headers: {
+                    ...getHeaders(true),
+                    'X-Reference-Id': referenceId,
+                },
+            }
+        );
+    });
     return { referenceId };
 }
 
@@ -95,34 +180,16 @@ export async function requestToPay(payload: RequestToPayPayload): Promise<{ refe
  * If MoMo reports SUCCESSFUL, sync job to Funded (so UI and MoMo Payments page update even when callback is not received, e.g. in sandbox).
  */
 export async function getTransactionStatus(referenceId: string): Promise<unknown> {
-    await ensureToken();
-    const response = await axios.get(
-        `${baseUrl}/collection/v1_0/requesttopay/${referenceId}`,
-        { headers: getHeaders(true) }
+    const response = await withCollectionTokenRetry(async () =>
+        axios.get(
+            `${baseUrl}/collection/v1_0/requesttopay/${referenceId}`,
+            { headers: getHeaders(true) }
+        ),
     );
     const data = response.data as { status?: string };
     if (data?.status === 'SUCCESSFUL') {
-        const { DB } = await import('@/database');
-        const [rows] = await DB.Jobs.update(
-            { funding_status: 'Funded', momo_paid_at: new Date() },
-            {
-                where: {
-                    momo_reference_id: referenceId,
-                    status: 'Pending',
-                },
-            }
-        );
-        if (rows === 0) {
-            await DB.Jobs.update(
-                { funding_status: 'Funded', momo_paid_at: new Date() },
-                {
-                    where: {
-                        momo_reference_id: referenceId,
-                    },
-                }
-            );
-        }
-        if (rows > 0) logger.info('Job marked as Funded from status check:', referenceId);
+        await settleJobFunding(referenceId);
+        logger.info('Job marked as Funded from status check:', referenceId);
     }
     return response.data;
 }
@@ -141,26 +208,27 @@ export interface CreateInvoicePayload {
  * Create invoice (Collections v2).
  */
 export async function createInvoice(payload: CreateInvoicePayload): Promise<{ referenceId: string }> {
-    await ensureToken();
     const referenceId = randomUUID();
-    await axios.post(
-        `${baseUrl}/collection/v2_0/invoice`,
-        {
-            externalId: payload.externalId,
-            amount: payload.amount,
-            currency: payload.currency,
-            validityDuration: payload.validityDuration ?? '3600',
-            intendedPayer: payload.intendedPayer,
-            payee: payload.payee,
-            description: payload.description,
-        },
-        {
-            headers: {
-                ...getHeaders(true),
-                'X-Reference-Id': referenceId,
+    await withCollectionTokenRetry(async () => {
+        await axios.post(
+            `${baseUrl}/collection/v2_0/invoice`,
+            {
+                externalId: payload.externalId,
+                amount: payload.amount,
+                currency: payload.currency,
+                validityDuration: payload.validityDuration ?? '3600',
+                intendedPayer: payload.intendedPayer,
+                payee: payload.payee,
+                description: payload.description,
             },
-        }
-    );
+            {
+                headers: {
+                    ...getHeaders(true),
+                    'X-Reference-Id': referenceId,
+                },
+            }
+        );
+    });
     return { referenceId };
 }
 
@@ -168,10 +236,11 @@ export async function createInvoice(payload: CreateInvoicePayload): Promise<{ re
  * Get invoice status by reference ID.
  */
 export async function getInvoiceStatus(referenceId: string): Promise<unknown> {
-    await ensureToken();
-    const response = await axios.get(
-        `${baseUrl}/collection/v2_0/invoice/${referenceId}`,
-        { headers: getHeaders(true) }
+    const response = await withCollectionTokenRetry(async () =>
+        axios.get(
+            `${baseUrl}/collection/v2_0/invoice/${referenceId}`,
+            { headers: getHeaders(true) }
+        ),
     );
     return response.data;
 }
@@ -206,14 +275,14 @@ export async function fundJob(
     if (jobAny.funding_status === 'Pending') throw new Error('Payment already requested. Check your phone or wait for confirmation.');
 
     const budget = Number(jobAny.budget) || 0;
-    const fee = (serviceFeePercent / 100) * budget;
-    const totalAmount = Math.round((budget + fee) * 100) / 100;
+    const jobCurrency = String((job as any).currency || defaultCurrency || 'USD').toUpperCase();
+    const totalAmount = budget;
     const amountStr = totalAmount.toFixed(0);
 
     const referenceId = (
         await requestToPay({
             amount: amountStr,
-            currency: defaultCurrency,
+            currency: jobCurrency,
             externalId: jobId,
             payer: { partyIdType: 'MSISDN', partyId: normalizePartyId(payerPartyId) },
             payerMessage: `Ogera job: ${(job as { job_title?: string }).job_title || jobId}`,
@@ -225,7 +294,7 @@ export async function fundJob(
         { funding_status: 'Pending', momo_reference_id: referenceId },
         { where: { job_id: jobId } }
     );
-    return { referenceId, totalAmount, currency: defaultCurrency };
+    return { referenceId, totalAmount, currency: jobCurrency };
 }
 
 /**
@@ -238,27 +307,8 @@ export async function handleCallback(body: unknown): Promise<void> {
     const status = (obj.status ?? obj.paymentStatus) as string | undefined;
     if (!referenceId) return;
 
-    const { DB } = await import('@/database');
-    const [rows] = await DB.Jobs.update(
-        { funding_status: 'Funded', momo_paid_at: new Date() },
-        {
-            where: {
-                momo_reference_id: referenceId,
-                status: 'Pending',
-            },
-        }
-    );
-    if (rows === 0) {
-        await DB.Jobs.update(
-            { funding_status: 'Funded', momo_paid_at: new Date() },
-            {
-                where: {
-                    momo_reference_id: referenceId,
-                },
-            }
-        );
-    }
-    if (rows > 0 && (status === 'SUCCESSFUL' || !status)) {
+    if (status === 'SUCCESSFUL' || !status) {
+        await settleJobFunding(referenceId);
         logger.info('Job marked as Funded for reference:', referenceId);
     }
 }
@@ -298,6 +348,19 @@ async function getDisbursementToken(): Promise<string> {
     return cachedDisbursementToken;
 }
 
+async function withDisbursementTokenRetry<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+        return await operation();
+    } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+            cachedDisbursementToken = null;
+            await getDisbursementToken();
+            return await operation();
+        }
+        throw error;
+    }
+}
+
 export interface DisbursementTransferPayload {
     amount: string;
     currency: string;
@@ -311,28 +374,32 @@ export interface DisbursementTransferPayload {
  * Disbursement transfer: send money from Ogera wallet to payee (student) MoMo.
  */
 export async function disbursementTransfer(payload: DisbursementTransferPayload): Promise<{ referenceId: string }> {
-    const token = await getDisbursementToken();
+    if (!cachedDisbursementToken) {
+        await getDisbursementToken();
+    }
     const referenceId = randomUUID();
-    await axios.post(
-        `${dispConfig.baseUrl}/disbursement/v1_0/transfer`,
-        {
-            amount: payload.amount,
-            currency: payload.currency,
-            externalId: payload.externalId,
-            payee: { partyIdType: 'MSISDN', partyId: normalizePartyId(payload.partyId) },
-            payerMessage: payload.payerMessage ?? 'Ogera job payment',
-            payeeNote: payload.payeeNote ?? 'Payment for completed job',
-        },
-        {
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'X-Reference-Id': referenceId,
-                'X-Target-Environment': dispConfig.targetEnvironment,
-                'Ocp-Apim-Subscription-Key': dispConfig.subscriptionKey,
-                'Content-Type': 'application/json',
+    await withDisbursementTokenRetry(async () => {
+        await axios.post(
+            `${dispConfig.baseUrl}/disbursement/v1_0/transfer`,
+            {
+                amount: payload.amount,
+                currency: payload.currency,
+                externalId: payload.externalId,
+                payee: { partyIdType: 'MSISDN', partyId: normalizePartyId(payload.partyId) },
+                payerMessage: payload.payerMessage ?? 'Ogera job payment',
+                payeeNote: payload.payeeNote ?? 'Payment for completed job',
             },
-        }
-    );
+            {
+                headers: {
+                    Authorization: `Bearer ${cachedDisbursementToken}`,
+                    'X-Reference-Id': referenceId,
+                    'X-Target-Environment': dispConfig.targetEnvironment,
+                    'Ocp-Apim-Subscription-Key': dispConfig.subscriptionKey,
+                    'Content-Type': 'application/json',
+                },
+            }
+        );
+    });
     return { referenceId };
 }
 
@@ -340,16 +407,20 @@ export async function disbursementTransfer(payload: DisbursementTransferPayload)
  * Get Ogera disbursement account balance (wallet total – money received from employers, available for payouts).
  */
 export async function getDisbursementAccountBalance(): Promise<{ availableBalance: string; currency: string }> {
-    const token = await getDisbursementToken();
-    const response = await axios.get(
-        `${dispConfig.baseUrl}/disbursement/v1_0/account/balance`,
-        {
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'X-Target-Environment': dispConfig.targetEnvironment,
-                'Ocp-Apim-Subscription-Key': dispConfig.subscriptionKey,
-            },
-        }
+    if (!cachedDisbursementToken) {
+        await getDisbursementToken();
+    }
+    const response = await withDisbursementTokenRetry(async () =>
+        axios.get(
+            `${dispConfig.baseUrl}/disbursement/v1_0/account/balance`,
+            {
+                headers: {
+                    Authorization: `Bearer ${cachedDisbursementToken}`,
+                    'X-Target-Environment': dispConfig.targetEnvironment,
+                    'Ocp-Apim-Subscription-Key': dispConfig.subscriptionKey,
+                },
+            }
+        ),
     );
     const data = response.data as { availableBalance?: string; currency?: string };
     return {
@@ -362,16 +433,20 @@ export async function getDisbursementAccountBalance(): Promise<{ availableBalanc
  * Get disbursement transfer status by reference ID.
  */
 export async function getDisbursementTransferStatus(referenceId: string): Promise<unknown> {
-    const token = await getDisbursementToken();
-    const response = await axios.get(
-        `${dispConfig.baseUrl}/disbursement/v1_0/transfer/${referenceId}`,
-        {
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'X-Target-Environment': dispConfig.targetEnvironment,
-                'Ocp-Apim-Subscription-Key': dispConfig.subscriptionKey,
-            },
-        }
+    if (!cachedDisbursementToken) {
+        await getDisbursementToken();
+    }
+    const response = await withDisbursementTokenRetry(async () =>
+        axios.get(
+            `${dispConfig.baseUrl}/disbursement/v1_0/transfer/${referenceId}`,
+            {
+                headers: {
+                    Authorization: `Bearer ${cachedDisbursementToken}`,
+                    'X-Target-Environment': dispConfig.targetEnvironment,
+                    'Ocp-Apim-Subscription-Key': dispConfig.subscriptionKey,
+                },
+            }
+        ),
     );
     return response.data;
 }
@@ -398,7 +473,17 @@ export async function payStudentForJob(jobId: string, userId: string): Promise<{
         ],
     });
     if (!job) throw new Error('Job not found');
-    const jobAny = job as { employer_id: string; budget: number; funding_status?: string; jobApplications?: Array<{ application_id: string; student?: { mobile_number?: string } }> };
+    const jobAny = job as {
+        employer_id: string;
+        budget: number;
+        currency?: string;
+        funding_status?: string;
+        jobApplications?: Array<{
+            application_id: string;
+            preferred_payout_currency?: string;
+            student?: { user_id?: string; mobile_number?: string };
+        }>;
+    };
     if (jobAny.employer_id !== userId) throw new Error('Only the job employer can approve work and pay the student');
     if (jobAny.funding_status === 'Paid') throw new Error('Student has already been paid for this job');
     if (jobAny.funding_status !== 'Funded') throw new Error('Job must be funded before paying the student');
@@ -410,14 +495,33 @@ export async function payStudentForJob(jobId: string, userId: string): Promise<{
     if (!mobile || !mobile.trim()) throw new Error('Student has no mobile number. Student must add MoMo number in profile to receive payment.');
     const budget = Number(jobAny.budget) || 0;
     if (budget <= 0) throw new Error('Job budget must be greater than zero');
-    // Employer paid (budget + 10%) = total in Ogera wallet. Student gets 90% of that; Ogera keeps 10%.
-    const totalInWallet = budget * (1 + serviceFeePercent / 100);
-    const amountToStudent = Math.round(totalInWallet * 0.9);
-    const amountStr = String(amountToStudent);
+    const jobCurrency = String(jobAny.currency || 'USD').toUpperCase();
+    const payoutCurrency = String(
+        applications[0].preferred_payout_currency || jobCurrency,
+    ).toUpperCase();
+    const payoutAmountInJobCurrency =
+        Math.round((budget * (STUDENT_SHARE_PERCENT / 100)) * 1_000_000) / 1_000_000;
+
+    // Step 1: convert payout amount from job currency to wallet currency (USD).
+    const toWalletFx = await convertCurrency(
+        payoutAmountInJobCurrency,
+        jobCurrency,
+        OGERA_WALLET_CURRENCY,
+    );
+    const walletDeductionAmount = toWalletFx.convertedAmount;
+
+    // Step 2: convert wallet amount from USD to student's preferred payout currency.
+    const toStudentFx = await convertCurrency(
+        walletDeductionAmount,
+        OGERA_WALLET_CURRENCY,
+        payoutCurrency,
+    );
+    const amountToStudent = toStudentFx.convertedAmount;
+    const amountStr = String(Math.round(amountToStudent));
     const referenceId = (
         await disbursementTransfer({
             amount: amountStr,
-            currency: dispConfig.currency,
+            currency: payoutCurrency,
             externalId: jobId,
             partyId: mobile,
             payerMessage: `Ogera job payment: ${(job as { job_title?: string }).job_title || jobId}`,
@@ -435,11 +539,58 @@ export async function payStudentForJob(jobId: string, userId: string): Promise<{
             disbursement_reference_id: referenceId,
             paid_at: new Date(),
             status: 'Completed',
-            amount_paid_to_student: amountToStudent,
+            amount_paid_to_student: walletDeductionAmount,
         },
         { where: { job_id: jobId } }
     );
-    logger.info('Job paid via disbursement', { jobId, referenceId, amountToStudent, totalInWallet });
+    await createTransactionEntry({
+        user_id: userId,
+        job_id: jobId,
+        amount: payoutAmountInJobCurrency,
+        currency: jobCurrency,
+        type: 'JOB_PAYOUT_WALLET_DEBIT',
+        reference_id: referenceId,
+        original_amount: payoutAmountInJobCurrency,
+        original_currency: jobCurrency,
+        converted_amount: walletDeductionAmount,
+        converted_currency: OGERA_WALLET_CURRENCY,
+        exchange_rate: toWalletFx.rate,
+        fx_timestamp: toWalletFx.timestamp ? new Date(toWalletFx.timestamp) : null,
+        metadata: {
+            stage: 'WALLET_DEDUCTION',
+            student_share_percent: STUDENT_SHARE_PERCENT,
+            payout_currency: payoutCurrency,
+            wallet_currency: OGERA_WALLET_CURRENCY,
+        },
+        description: `Wallet deduction for job payout ${jobId}: ${jobCurrency} -> ${OGERA_WALLET_CURRENCY}.`,
+    });
+    await createTransactionEntry({
+        user_id: applications[0].student?.user_id || null,
+        job_id: jobId,
+        amount: walletDeductionAmount,
+        currency: OGERA_WALLET_CURRENCY,
+        type: 'STUDENT_PAYOUT_DISBURSEMENT',
+        reference_id: referenceId,
+        original_amount: walletDeductionAmount,
+        original_currency: OGERA_WALLET_CURRENCY,
+        converted_amount: amountToStudent,
+        converted_currency: payoutCurrency,
+        exchange_rate: toStudentFx.rate,
+        fx_timestamp: toStudentFx.timestamp ? new Date(toStudentFx.timestamp) : null,
+        metadata: {
+            stage: 'STUDENT_DISBURSEMENT',
+            disbursement_reference_id: referenceId,
+            student_share_percent: STUDENT_SHARE_PERCENT,
+        },
+        description: `Student payout for job ${jobId}: ${OGERA_WALLET_CURRENCY} -> ${payoutCurrency}.`,
+    });
+    logger.info('Job paid via disbursement', {
+        jobId,
+        referenceId,
+        walletDeductionAmount,
+        amountToStudent,
+        payoutCurrency,
+    });
     return { referenceId, amount: amountToStudent };
 }
 

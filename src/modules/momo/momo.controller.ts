@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import * as momoService from './momo.service';
 import logger from '@/utils/logger';
-import { MOMO_CONFIG, MOMO_DISBURSEMENT_CONFIG } from '@/config';
+import { MOMO_DISBURSEMENT_CONFIG } from '@/config';
 
 /**
  * Generate MoMo access token (and cache it). Useful for testing or pre-warming.
@@ -192,30 +192,192 @@ export async function listJobPayments(req: Request, res: Response): Promise<void
             where: { funding_status: { [Op.in]: ['Pending', 'Funded', 'Paid'] } },
             include: [
                 { model: DB.Users, as: 'employer', attributes: ['user_id', 'full_name', 'email', 'mobile_number'] },
+                {
+                    model: DB.Transactions,
+                    as: 'transactions',
+                    required: false,
+                    where: {
+                        type: {
+                            [Op.in]: [
+                                'JOB_FUNDING_CREDIT',
+                                'JOB_PAYOUT_WALLET_DEBIT',
+                                'STUDENT_PAYOUT_DISBURSEMENT',
+                            ],
+                        },
+                    },
+                },
             ],
             order: [['momo_paid_at', 'DESC'], ['updated_at', 'DESC']],
         });
-        const feePct = 10;
         const list = (jobs as Array<Record<string, any>>).map((j) => {
-            const budget = Number(j.budget) || 0;
-            const stored = j.amount_paid_to_student != null ? Number(j.amount_paid_to_student) : null;
-            const amount_paid_to_student = stored ?? (j.funding_status === 'Paid' ? Math.round(budget * (1 + feePct / 100) * 0.9) : null);
+            const txs = (j as any).transactions || [];
+            const fundingTx = txs.find((t: any) => t.type === 'JOB_FUNDING_CREDIT');
+            const payoutWalletTx = txs.find((t: any) => t.type === 'JOB_PAYOUT_WALLET_DEBIT');
+            const payoutStudentTx = txs.find((t: any) => t.type === 'STUDENT_PAYOUT_DISBURSEMENT');
             return {
                 job_id: j.job_id,
                 job_title: j.job_title,
                 budget: j.budget,
+                currency: j.currency || 'USD',
                 funding_status: j.funding_status,
                 momo_reference_id: j.momo_reference_id,
                 momo_paid_at: j.momo_paid_at,
                 disbursement_reference_id: j.disbursement_reference_id,
                 paid_at: j.paid_at,
-                amount_paid_to_student,
+                amount_paid_to_student: payoutStudentTx ? Number(payoutStudentTx.converted_amount) : null,
+                amount_paid_to_student_currency: payoutStudentTx?.converted_currency || null,
+                wallet_deduction_amount: payoutWalletTx ? Number(payoutWalletTx.converted_amount) : null,
+                wallet_currency: payoutWalletTx?.converted_currency || MOMO_DISBURSEMENT_CONFIG.currency,
+                transaction_details: {
+                    funding: fundingTx
+                        ? {
+                              original_amount: Number(fundingTx.original_amount),
+                              original_currency: fundingTx.original_currency,
+                              converted_amount: Number(fundingTx.converted_amount),
+                              converted_currency: fundingTx.converted_currency,
+                              exchange_rate: Number(fundingTx.exchange_rate),
+                              fx_timestamp: fundingTx.fx_timestamp,
+                          }
+                        : null,
+                    wallet_deduction: payoutWalletTx
+                        ? {
+                              original_amount: Number(payoutWalletTx.original_amount),
+                              original_currency: payoutWalletTx.original_currency,
+                              converted_amount: Number(payoutWalletTx.converted_amount),
+                              converted_currency: payoutWalletTx.converted_currency,
+                              exchange_rate: Number(payoutWalletTx.exchange_rate),
+                              fx_timestamp: payoutWalletTx.fx_timestamp,
+                          }
+                        : null,
+                    student_payout: payoutStudentTx
+                        ? {
+                              original_amount: Number(payoutStudentTx.original_amount),
+                              original_currency: payoutStudentTx.original_currency,
+                              converted_amount: Number(payoutStudentTx.converted_amount),
+                              converted_currency: payoutStudentTx.converted_currency,
+                              exchange_rate: Number(payoutStudentTx.exchange_rate),
+                              fx_timestamp: payoutStudentTx.fx_timestamp,
+                          }
+                        : null,
+                },
                 employer: (j as { employer?: Record<string, unknown> }).employer,
             };
         });
         res.json({ success: true, data: list });
     } catch (error) {
         logger.error('MoMo listJobPayments error:', error);
+        res.status(500).json({ success: false, message: (error as Error).message });
+    }
+}
+
+/**
+ * Employer/Admin: get one job payment detail including FX conversion breakdown.
+ */
+export async function getJobPaymentDetail(req: Request, res: Response): Promise<void> {
+    try {
+        const userId = req.user?.user_id;
+        const userRole = String(req.user?.role || '').toLowerCase().trim();
+        const { jobId } = req.params as { jobId: string };
+        if (!userId) {
+            res.status(401).json({ success: false, message: 'Unauthorized' });
+            return;
+        }
+        if (!jobId) {
+            res.status(400).json({ success: false, message: 'jobId is required' });
+            return;
+        }
+
+        const { DB } = await import('@/database');
+        const { Op } = await import('sequelize');
+        const job = (await DB.Jobs.findOne({
+            where: { job_id: jobId },
+            include: [
+                { model: DB.Users, as: 'employer', attributes: ['user_id', 'full_name', 'email', 'mobile_number'] },
+                {
+                    model: DB.Transactions,
+                    as: 'transactions',
+                    required: false,
+                    where: {
+                        type: {
+                            [Op.in]: [
+                                'JOB_FUNDING_CREDIT',
+                                'JOB_PAYOUT_WALLET_DEBIT',
+                                'STUDENT_PAYOUT_DISBURSEMENT',
+                            ],
+                        },
+                    },
+                },
+            ],
+        })) as any;
+
+        if (!job) {
+            res.status(404).json({ success: false, message: 'Job not found' });
+            return;
+        }
+
+        const isAdminLike = userRole.includes('admin');
+        if (!isAdminLike && job.employer_id !== userId) {
+            res.status(403).json({ success: false, message: 'You can only view your own job payment details' });
+            return;
+        }
+
+        const txs = job.transactions || [];
+        const fundingTx = txs.find((t: any) => t.type === 'JOB_FUNDING_CREDIT');
+        const payoutWalletTx = txs.find((t: any) => t.type === 'JOB_PAYOUT_WALLET_DEBIT');
+        const payoutStudentTx = txs.find((t: any) => t.type === 'STUDENT_PAYOUT_DISBURSEMENT');
+
+        const payload = {
+            job_id: job.job_id,
+            job_title: job.job_title,
+            budget: Number(job.budget) || 0,
+            currency: job.currency || 'USD',
+            funding_status: job.funding_status,
+            momo_reference_id: job.momo_reference_id,
+            momo_paid_at: job.momo_paid_at,
+            disbursement_reference_id: job.disbursement_reference_id,
+            paid_at: job.paid_at,
+            employer: job.employer,
+            amount_paid_to_student: payoutStudentTx ? Number(payoutStudentTx.converted_amount) : null,
+            amount_paid_to_student_currency: payoutStudentTx?.converted_currency || null,
+            wallet_deduction_amount: payoutWalletTx ? Number(payoutWalletTx.converted_amount) : null,
+            wallet_currency: payoutWalletTx?.converted_currency || 'USD',
+            transaction_details: {
+                funding: fundingTx
+                    ? {
+                          original_amount: Number(fundingTx.original_amount),
+                          original_currency: fundingTx.original_currency,
+                          converted_amount: Number(fundingTx.converted_amount),
+                          converted_currency: fundingTx.converted_currency,
+                          exchange_rate: Number(fundingTx.exchange_rate),
+                          fx_timestamp: fundingTx.fx_timestamp,
+                      }
+                    : null,
+                wallet_deduction: payoutWalletTx
+                    ? {
+                          original_amount: Number(payoutWalletTx.original_amount),
+                          original_currency: payoutWalletTx.original_currency,
+                          converted_amount: Number(payoutWalletTx.converted_amount),
+                          converted_currency: payoutWalletTx.converted_currency,
+                          exchange_rate: Number(payoutWalletTx.exchange_rate),
+                          fx_timestamp: payoutWalletTx.fx_timestamp,
+                      }
+                    : null,
+                student_payout: payoutStudentTx
+                    ? {
+                          original_amount: Number(payoutStudentTx.original_amount),
+                          original_currency: payoutStudentTx.original_currency,
+                          converted_amount: Number(payoutStudentTx.converted_amount),
+                          converted_currency: payoutStudentTx.converted_currency,
+                          exchange_rate: Number(payoutStudentTx.exchange_rate),
+                          fx_timestamp: payoutStudentTx.fx_timestamp,
+                      }
+                    : null,
+            },
+        };
+
+        res.json({ success: true, data: payload });
+    } catch (error) {
+        logger.error('MoMo getJobPaymentDetail error:', error);
         res.status(500).json({ success: false, message: (error as Error).message });
     }
 }
@@ -257,39 +419,38 @@ export async function approveWorkAndPay(req: Request, res: Response): Promise<vo
 export async function getWalletBalance(req: Request, res: Response): Promise<void> {
     try {
         const { DB } = await import('@/database');
-        const { Op } = await import('sequelize');
-
-        const jobs = await DB.Jobs.findAll({
-            where: { funding_status: { [Op.in]: ['Funded', 'Paid'] } },
-            attributes: ['budget', 'funding_status', 'amount_paid_to_student'],
+        const credits = await DB.Transactions.findAll({
+            where: { type: 'JOB_FUNDING_CREDIT' },
+            attributes: ['converted_amount', 'converted_currency'],
+        });
+        const debits = await DB.Transactions.findAll({
+            where: { type: 'JOB_PAYOUT_WALLET_DEBIT' },
+            attributes: ['converted_amount', 'converted_currency'],
         });
 
-        const feePct = MOMO_CONFIG.serviceFeePercent ?? 0;
         let totalReceived = 0;
         let totalPaidToStudents = 0;
+        let walletCurrency = 'USD';
 
-        for (const j of jobs as Array<{ budget: number; funding_status?: string; amount_paid_to_student?: number | null }>) {
-            const budget = Number(j.budget) || 0;
-            if (!budget) continue;
-            const totalForJob = budget * (1 + feePct / 100);
-            totalReceived += totalForJob;
-
-            if (j.funding_status === 'Paid') {
-                const paid =
-                    j.amount_paid_to_student != null
-                        ? Number(j.amount_paid_to_student)
-                        : Math.round(totalForJob * 0.9);
-                totalPaidToStudents += paid;
-            }
+        for (const tx of credits as Array<{ converted_amount?: number; converted_currency?: string }>) {
+            totalReceived += Number(tx.converted_amount) || 0;
+            walletCurrency = tx.converted_currency || walletCurrency;
+        }
+        for (const tx of debits as Array<{ converted_amount?: number; converted_currency?: string }>) {
+            totalPaidToStudents += Number(tx.converted_amount) || 0;
+            walletCurrency = tx.converted_currency || walletCurrency;
         }
 
-        const available = Math.max(0, Math.round(totalReceived - totalPaidToStudents));
+        const available = Math.max(
+            0,
+            Math.round((totalReceived - totalPaidToStudents) * 1_000_000) / 1_000_000,
+        );
 
         res.json({
             success: true,
             data: {
                 availableBalance: String(available),
-                currency: MOMO_DISBURSEMENT_CONFIG.currency,
+                currency: walletCurrency,
             },
         });
     } catch (error) {
