@@ -51,6 +51,37 @@ const repo = {
     return await DB.Notifications.create(notificationData);
   },
 
+  createNotificationsBulk: async (notificationsData: any[]) => {
+    if (!notificationsData.length) return [];
+    return await DB.Notifications.bulkCreate(notificationsData);
+  },
+
+  findUsersForNotificationTargets: async (
+    targetMode: 'specific' | 'role',
+    targetRoleTypes: string[],
+    targetUserIds: string[]
+  ) => {
+    const where: any = {};
+
+    if (targetMode === 'role') {
+      where.role_type = {
+        [Op.in]: targetRoleTypes,
+      };
+    } else {
+      where.user_id = {
+        [Op.in]: targetUserIds,
+      };
+      where.role_type = {
+        [Op.in]: ['student', 'employer'],
+      };
+    }
+
+    return await DB.Users.findAll({
+      where,
+      attributes: ['user_id', 'email', 'role_type', 'full_name'],
+    });
+  },
+
   findNotificationById: async (notification_id: string) => {
     return await DB.Notifications.findOne({
       where: { notification_id },

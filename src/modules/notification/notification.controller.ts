@@ -7,6 +7,7 @@ import {
   markNotificationAsReadService,
   markAllNotificationsAsReadService,
   deleteNotificationService,
+  sendAdminNotificationService,
 } from './notification.service';
 
 const response = new ResponseFormat();
@@ -215,6 +216,50 @@ export const deleteNotification = async (
       StatusCodes.OK,
       result,
       'Notification deleted successfully'
+    );
+  } catch (error: any) {
+    response.errorResponse(
+      res,
+      error.status || StatusCodes.INTERNAL_SERVER_ERROR,
+      false,
+      error.message
+    );
+  }
+};
+
+export const sendAdminNotification = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      response.errorResponse(
+        res,
+        StatusCodes.UNAUTHORIZED,
+        false,
+        'User not authenticated'
+      );
+      return;
+    }
+
+    const result = await sendAdminNotificationService({
+      sender_user_id: req.user.user_id,
+      sender_role: req.user.role,
+      title: req.body?.title,
+      message: req.body?.message,
+      target_mode: req.body?.target_mode,
+      target_user_ids: req.body?.target_user_ids,
+      target_roles: req.body?.target_roles,
+      send_email: req.body?.send_email,
+    });
+
+    response.response(
+      res,
+      true,
+      StatusCodes.OK,
+      result,
+      'Notification sent successfully'
     );
   } catch (error: any) {
     response.errorResponse(

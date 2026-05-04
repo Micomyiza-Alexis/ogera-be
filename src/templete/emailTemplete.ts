@@ -935,3 +935,124 @@ The Ogera Team`;
 
     return { text, html };
 };
+
+/** Escape dynamic content injected into broadcast HTML emails. */
+const escapeAdminBroadcastHtml = (raw: string) =>
+    String(raw ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+export interface AdminBroadcastNotificationParams {
+    recipientName?: string | null;
+    title: string;
+    message: string;
+    senderLabel: 'Admin' | 'SuperAdmin';
+}
+
+/**
+ * HTML email for admin/superadmin platform broadcasts (table layout for consistent client rendering).
+ */
+export const AdminBroadcastNotificationTemplate = (
+    params: AdminBroadcastNotificationParams,
+): { html: string; text: string } => {
+    const { recipientName, title, message, senderLabel } = params;
+    const safeTitle = escapeAdminBroadcastHtml(title);
+    const safeMessage = escapeAdminBroadcastHtml(message).replace(/\n/g, '<br />');
+    const safeSender = escapeAdminBroadcastHtml(senderLabel);
+    const greeting = recipientName?.trim()
+        ? `Hello ${escapeAdminBroadcastHtml(recipientName.trim())},`
+        : 'Hello,';
+
+    const text = [
+        'Ogera — Important notification',
+        '',
+        recipientName?.trim() ? `Hello ${recipientName.trim()},` : 'Hello,',
+        '',
+        `Title: ${title}`,
+        '',
+        message,
+        '',
+        `Sent by platform ${senderLabel}`,
+        '',
+        '—',
+        'You received this because an administrator sent a message through the Ogera platform.',
+        '',
+        'Best regards,',
+        'The Ogera Team',
+    ].join('\n');
+
+    const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${safeTitle}</title>
+</head>
+<body style="margin:0;padding:0;background:#e8ecf1;font-family:Arial,Helvetica,sans-serif;-webkit-font-smoothing:antialiased;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#e8ecf1;padding:28px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(15,23,42,0.12);border:1px solid #e2e8f0;">
+          <tr>
+            <td style="background:linear-gradient(135deg,#5b21b6 0%,#7c3aed 45%,#6d28d9 100%);padding:28px 32px 24px;text-align:left;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td valign="middle">
+                    <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:.2em;color:rgba(255,255,255,0.85);text-transform:uppercase;">Ogera</p>
+                    <p style="margin:0;font-size:22px;font-weight:800;line-height:1.25;color:#ffffff;">Important update</p>
+                  </td>
+                  <td width="96" valign="middle" align="right">
+                    <span style="display:inline-block;padding:6px 12px;background:rgba(255,255,255,0.22);border-radius:999px;font-size:12px;font-weight:700;color:#ffffff;">Official</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 32px 8px;">
+              <p style="margin:0 0 20px;font-size:16px;line-height:1.6;color:#334155;">${greeting}</p>
+              <p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:.12em;color:#64748b;text-transform:uppercase;">Title</p>
+              <h1 style="margin:0 0 22px;font-size:26px;line-height:1.3;color:#0f172a;font-weight:800;">${safeTitle}</h1>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;">
+                <tr>
+                  <td style="height:1px;background:linear-gradient(90deg,#7c3aed,#a78bfa);border-radius:1px;line-height:1px;font-size:1px;">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 32px 28px;">
+              <p style="margin:0 0 12px;font-size:13px;color:#475569;line-height:1.5;"><strong style="color:#64748b;">Sent by:</strong> <span style="color:#334155;font-weight:600;">${safeSender}</span></p>
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:22px 20px;">
+                <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">Message</p>
+                <div style="margin:0;font-size:15px;line-height:1.75;color:#1e293b;">${safeMessage}</div>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:22px 32px 28px;background:#f1f5f9;border-top:1px solid #e2e8f0;">
+              <p style="margin:0 0 14px;font-size:13px;line-height:1.65;color:#475569;">
+                You are receiving this because an administrator broadcast this notice on <strong>Ogera</strong>. Sign in to your dashboard for the full notification center.
+              </p>
+              <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.5;">
+                © ${new Date().getFullYear()} Ogera. This email was sent automatically; do not share passwords or OTPs by email.
+              </p>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:20px 0 0;font-size:11px;color:#94a3b8;text-align:center;max-width:560px;line-height:1.5;">
+          If this message looks unexpected, contact your Ogera administrator.
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`;
+
+    return { html, text };
+};
