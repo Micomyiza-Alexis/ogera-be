@@ -5,6 +5,7 @@ import {
   markNotificationAsRead,
   markAllNotificationsAsRead,
   deleteNotification,
+  sendAdminNotification,
 } from './notification.controller';
 import { authMiddleware } from '@/middlewares/auth.middleware';
 import { PermissionChecker } from '@/middlewares/role.middleware';
@@ -49,6 +50,14 @@ notificationRouter.delete(
   authMiddleware,
   PermissionChecker('/notifications', 'delete'),
   deleteNotification
+);
+
+// Admin/superadmin sends notification to specific users or role groups
+notificationRouter.post(
+  '/send',
+  authMiddleware,
+  PermissionChecker('/notifications', 'edit'),
+  sendAdminNotification
 );
 
 export default notificationRouter;
