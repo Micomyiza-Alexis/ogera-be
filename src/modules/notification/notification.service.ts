@@ -93,9 +93,9 @@ export const sendAdminNotificationService = async (params: {
   );
   await repo.createNotificationsBulk(notificationsToCreate);
 
-  // Copy for sender: non-superadmin admins only see their own user_id in GET /notifications.
-  // Skip if the sender is already in the recipient list (avoids duplicate rows).
-  const shouldCreateSenderCopy = normalizedSenderRole !== 'superadmin';
+  // Create exactly one sender copy so sender inbox shows a single broadcast item,
+  // regardless of how many recipients were targeted.
+  const shouldCreateSenderCopy = true;
   const senderWasRecipient = recipients.some(
     (r: any) => String(r.user_id) === String(params.sender_user_id)
   );
@@ -169,7 +169,7 @@ export const getNotificationsService = async (
 ) => {
   const isSuperAdmin = role?.toLowerCase() === 'superadmin';
   if (isSuperAdmin) {
-    return await repo.findAllNotifications(options);
+    return await repo.findAllNotificationsForSuperAdminInbox(user_id, options);
   }
   return await repo.findNotificationsByUserId(user_id, options);
 };

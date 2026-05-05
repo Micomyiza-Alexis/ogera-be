@@ -112,6 +112,46 @@ const repo = {
   },
 
   /**
+   * Superadmin inbox view:
+   * - Keep global visibility for normal product notifications.
+   * - Hide per-recipient admin broadcast duplicates generated for other users.
+   *   (titles prefixed with [Admin] / [SuperAdmin] are shown only for superadmin's own user_id)
+   */
+  findAllNotificationsForSuperAdminInbox: async (
+    superadmin_user_id: string,
+    options?: { is_read?: boolean; limit?: number }
+  ) => {
+    const where: any = {};
+    if (options?.is_read !== undefined) {
+      where.is_read = options.is_read;
+    }
+
+    const queryOptions: any = {
+      where,
+      order: [['created_at', 'DESC']],
+    };
+    if (options?.limit && options.limit > 0) {
+      queryOptions.limit = options.limit;
+    }
+
+    const notifications = await DB.Notifications.findAll(queryOptions);
+    const filtered = notifications.filter((notification: any) => {
+      const row = notification?.toJSON ? notification.toJSON() : notification;
+      const title = String(row?.title || '');
+      const isAdminBroadcast =
+        title.startsWith('[Admin] ') || title.startsWith('[SuperAdmin] ');
+
+      // For superadmin inbox, show only sender's own copy for admin broadcasts.
+      if (isAdminBroadcast) {
+        return String(row?.user_id) === String(superadmin_user_id);
+      }
+      return true;
+    });
+
+    return notificationsWithDetails(filtered);
+  },
+
+  /**
    * Read all notifications for a user from the database `notifications` table.
    * Optional: filter by is_read, limit count. Omit limit to return all rows.
    */
