@@ -1,4 +1,5 @@
 import nodemailer, { Transporter } from 'nodemailer';
+import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { EMAIL_CONFIG } from '@/config';
 import logger from './logger';
 
@@ -8,16 +9,30 @@ const createTransporter = (): Transporter => {
 
     // If service is provided, use it (simpler configuration)
     if (smtp.service) {
+        logger.info('Creating SMTP transporter using service', {
+            service: smtp.service,
+        });
         return nodemailer.createTransport({
             service: smtp.service,
             auth: {
                 user: smtp.auth.user,
                 pass: smtp.auth.pass,
             },
-        });
+            // Render/Cloud DNS can prefer IPv6 paths that fail for some SMTP providers.
+            // Force IPv4 and tighter timeouts for faster fail/retry behavior.
+            family: 4,
+            connectionTimeout: 60000,
+            greetingTimeout: 45000,
+            socketTimeout: 120000,
+        } as SMTPTransport.Options);
     }
 
     // Otherwise, use full SMTP configuration
+    logger.info('Creating SMTP transporter using host/port', {
+        host: smtp.host,
+        port: smtp.port,
+        secure: smtp.secure,
+    });
     return nodemailer.createTransport({
         host: smtp.host,
         port: smtp.port,
@@ -26,11 +41,15 @@ const createTransporter = (): Transporter => {
             user: smtp.auth.user,
             pass: smtp.auth.pass,
         },
+        family: 4,
+        connectionTimeout: 60000,
+        greetingTimeout: 45000,
+        socketTimeout: 120000,
         // Additional options for better compatibility
         tls: {
             rejectUnauthorized: false, // Allow self-signed certificates (set to true in production with valid certs)
         },
-    });
+    } as SMTPTransport.Options);
 };
 
 // Create transporter instance
