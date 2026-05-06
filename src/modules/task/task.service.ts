@@ -10,8 +10,8 @@ const EMPLOYER_ROLE_NAMES = new Set(["employer", "superadmin"]);
 
 const STUDENT_ALLOWED_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
   NOT_STARTED: ["IN_PROGRESS"],
-  IN_PROGRESS: ["SUBMITTED", "DISPUTED"],
-  SUBMITTED: ["DISPUTED"],
+  IN_PROGRESS: ["SUBMITTED", "COMPLETED", "DISPUTED"],
+  SUBMITTED: ["COMPLETED", "DISPUTED"],
   UNDER_REVIEW: ["DISPUTED"],
   COMPLETED: [],
   REJECTED: ["IN_PROGRESS", "DISPUTED"],
@@ -185,6 +185,16 @@ export const getEmployerTaskOverviewService = async (user_id: string) => {
   );
 
   return overview;
+};
+
+export const getMyAssignedTasksService = async (user_id: string) => {
+  const user = await getUserWithRole(user_id);
+  const { roleType } = getRoleDetails(user);
+  if (roleType !== "student") {
+    throw new CustomError("Only students can view assigned tasks", StatusCodes.FORBIDDEN);
+  }
+  const tasks = await repo.findTasksByAssignedStudentId(user_id);
+  return tasks.map(serializeTask);
 };
 
 export const getJobTaskManagementService = async (job_id: string, user_id: string) => {
@@ -371,4 +381,17 @@ export const updateTaskStatusService = async (
 
   const updated = await repo.updateTask(task_id, { status: nextStatus });
   return serializeTask(updated);
+};
+
+export const deleteTaskService = async (job_id: string, task_id: string, user_id: string) => {
+  await ensureEmployerAccessToJob(job_id, user_id);
+  const task = await repo.findTaskById(task_id);
+  if (!task || task.job_id !== job_id) {
+    throw new CustomError("Task not found", StatusCodes.NOT_FOUND);
+  }
+  const deleted = await repo.deleteTask(task_id);
+  if (!deleted) {
+    throw new CustomError("Task not found", StatusCodes.NOT_FOUND);
+  }
+  return { task_id };
 };

@@ -60,10 +60,18 @@ export const getAllJobs = async (
     next: NextFunction,
 ) => {
     try {
-        // Check if status query parameter is provided
-        const status = req.query.status as string | undefined;
-        const funded = req.query.funded as string | undefined;
-        const jobs = await getAllJobsService(status, funded, req.user);
+        const jobs = await getAllJobsService(
+            {
+                status: req.query.status as string | undefined,
+                funded: req.query.funded as string | undefined,
+                search: req.query.search as string | undefined,
+                location: req.query.location as string | undefined,
+                category: req.query.category as string | undefined,
+                currency: req.query.currency as string | undefined,
+                payment_range: req.query.payment_range as string | undefined,
+            },
+            req.user,
+        );
         response.response(
             res,
             true,
@@ -88,7 +96,7 @@ export const getPublicJobs = async (
     next: NextFunction,
 ) => {
     try {
-        const jobs = await getAllJobsService('Active', undefined, undefined);
+        const jobs = await getAllJobsService({ status: 'Active' }, undefined);
         response.response(
             res,
             true,
@@ -115,7 +123,7 @@ export const getActiveJobs = async (
     try {
         // Public landing page should show the same Active jobs list visible in app.
         // Use the general jobs query with status filter (no forced funded filter).
-        const jobs = await getAllJobsService('Active', undefined, req.user);
+        const jobs = await getAllJobsService({ status: 'Active' }, req.user);
         response.response(
             res,
             true,

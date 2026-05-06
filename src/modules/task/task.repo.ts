@@ -45,10 +45,26 @@ const repo = {
     });
   },
 
+  findTasksByAssignedStudentId: async (student_id: string) => {
+    return DB.Tasks.findAll({
+      where: { assigned_student_id: student_id },
+      include: taskIncludes,
+      order: [
+        ["updated_at", "DESC"],
+        ["created_at", "DESC"],
+      ],
+    });
+  },
+
   updateTask: async (task_id: string, updates: Record<string, unknown>) => {
     const [rows] = await DB.Tasks.update(updates, { where: { task_id } });
     if (rows === 0) return null;
     return repo.findTaskById(task_id);
+  },
+
+  deleteTask: async (task_id: string) => {
+    const rows = await DB.Tasks.destroy({ where: { task_id } });
+    return rows > 0;
   },
 
   findApprovedApplicationForJobAndStudent: async (
