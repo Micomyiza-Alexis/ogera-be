@@ -4,9 +4,11 @@ import { PermissionChecker } from "@/middlewares/role.middleware";
 import {
   createTask,
   getEmployerTaskOverview,
+  getMyAssignedTasks,
   getJobTaskManagement,
   updateTask,
   updateTaskStatus,
+  deleteTask,
 } from "./task.controller";
 
 const taskRouter = express.Router();
@@ -16,6 +18,12 @@ taskRouter.get(
   authMiddleware,
   PermissionChecker("/jobs", "view"),
   getEmployerTaskOverview,
+);
+
+taskRouter.get(
+  "/tasks/my-assigned",
+  authMiddleware,
+  getMyAssignedTasks,
 );
 
 taskRouter.get(
@@ -42,8 +50,14 @@ taskRouter.put(
 taskRouter.patch(
   "/jobs/:job_id/tasks/:task_id/status",
   authMiddleware,
-  PermissionChecker("/jobs", "edit"),
   updateTaskStatus,
+);
+
+taskRouter.delete(
+  "/jobs/:job_id/tasks/:task_id",
+  authMiddleware,
+  PermissionChecker("/jobs", "edit"),
+  deleteTask,
 );
 
 export default taskRouter;

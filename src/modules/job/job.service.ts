@@ -130,27 +130,63 @@ export const createJobService = async (
 };
 
 export const getAllJobsService = async (
-    status?: string,
-    funded?: string,
+    filters?: {
+        status?: string;
+        funded?: string;
+        search?: string;
+        location?: string;
+        category?: string;
+        currency?: string;
+        payment_range?: string;
+    },
     user?: { user_id: string; role: string },
 ) => {
     const normalizedRole = user?.role ? String(user.role).toLowerCase().trim() : '';
     const fundedFilter =
-        funded === 'true' ? true : funded === 'false' ? false : undefined;
+        filters?.funded === 'true' ? true : filters?.funded === 'false' ? false : undefined;
+    let budget_min: number | undefined;
+    let budget_max: number | undefined;
+    if (filters?.payment_range === 'under-500') {
+        budget_max = 499.99;
+    } else if (filters?.payment_range === '500-2000') {
+        budget_min = 500;
+        budget_max = 2000;
+    } else if (filters?.payment_range === '2000-5000') {
+        budget_min = 2000.01;
+        budget_max = 5000;
+    } else if (filters?.payment_range === '5000-plus') {
+        budget_min = 5000.01;
+    }
+    const repoFilters = {
+        status: filters?.status,
+        funded: fundedFilter,
+        search: filters?.search,
+        location: filters?.location,
+        category: filters?.category,
+        currency: filters?.currency,
+        budget_min,
+        budget_max,
+    };
 
     // Students should see only admin-approved/published jobs.
     // Funding is NOT required for visibility.
     if (normalizedRole === 'student') {
-        return await repo.findAllJobs('Active');
+        return await repo.findAllJobs({
+            ...repoFilters,
+            status: 'Active',
+        });
     }
 
     // Employers should see all their jobs by default.
     // They can still explicitly filter funded/unfunded with funded=true/false.
     if (normalizedRole === 'employer') {
-        return await repo.findAllJobs(status, fundedFilter);
+        return await repo.findAllJobs({
+            ...repoFilters,
+            employer_id: user?.user_id,
+        });
     }
 
-    return await repo.findAllJobs(status, fundedFilter);
+    return await repo.findAllJobs(repoFilters);
 };
 
 export const getJobsByStatusService = async (
@@ -161,14 +197,14 @@ export const getJobsByStatusService = async (
 
     // Public/unauthenticated views should only get funded jobs.
     if (!user) {
-        return await repo.findAllJobs(status, true);
+        return await repo.findAllJobs({ status, funded: true });
     }
 
     if (normalizedRole === 'student' || normalizedRole === 'employer') {
-        return await repo.findAllJobs(status, true);
+        return await repo.findAllJobs({ status, funded: true });
     }
 
-    return await repo.findAllJobs(status);
+    return await repo.findAllJobs({ status });
 };
 
 export const getJobByIdService = async (job_id: string) => {
