@@ -97,17 +97,23 @@ const toBrevoAttachments = async (
 };
 
 const sendViaBrevoApi = async (options: EmailOptions): Promise<any> => {
-    const { from, brevo } = EMAIL_CONFIG;
+    const { brevo } = EMAIL_CONFIG;
     const apiKey = brevo.apiKey;
+    const senderEmail = brevo.senderEmail;
+    const senderName = brevo.senderName;
 
     if (!apiKey) {
-        throw new Error('BREVO_API_KEY is not configured');
+        throw new Error('BREVO_API_KEY (or REVO_API_KEY) is not configured');
+    }
+
+    if (!senderEmail) {
+        throw new Error('BREVO_SENDER_EMAIL or EMAIL_FROM must be configured');
     }
 
     const payload = {
         sender: {
-            name: from.name,
-            email: from.email,
+            name: senderName,
+            email: senderEmail,
         },
         to: toAddressObjects(options.to),
         cc: toAddressObjects(options.cc),
@@ -119,18 +125,35 @@ const sendViaBrevoApi = async (options: EmailOptions): Promise<any> => {
         attachment: await toBrevoAttachments(options.attachments),
     };
 
-    const { data } = await axios.post(
-        brevo.apiUrl,
-        payload,
-        {
-            headers: {
-                'api-key': apiKey,
-                'content-type': 'application/json',
-                accept: 'application/json',
+    let data: any;
+    try {
+        const response = await axios.post(
+            brevo.apiUrl,
+            payload,
+            {
+                headers: {
+                    'api-key': apiKey,
+                    'content-type': 'application/json',
+                    accept: 'application/json',
+                },
+                timeout: 15000,
             },
-            timeout: 15000,
-        },
-    );
+        );
+        data = response.data;
+    } catch (error: any) {
+        if (axios.isAxiosError(error)) {
+            logger.error('Brevo API email send failed', {
+                status: error.response?.status,
+                data: error.response?.data,
+                code: error.code,
+                message: error.message,
+                senderEmail,
+                to: options.to,
+                subject: options.subject,
+            });
+        }
+        throw error;
+    }
 
     logger.info('Email sent successfully via Brevo API', {
         to: options.to,
