@@ -3,71 +3,63 @@ import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { EMAIL_CONFIG } from '@/config';
 import logger from './logger';
 
-// Create SMTP transporter with flexible configuration
+// Create SMTP transporter
 const createTransporter = (): Transporter => {
     const { smtp } = EMAIL_CONFIG;
 
-    // If service is provided, use it (simpler configuration)
-    if (smtp.service) {
-        logger.info('Creating SMTP transporter using service', {
-            service: smtp.service,
-        });
-        return nodemailer.createTransport({
-            service: smtp.service,
-            auth: {
-                user: smtp.auth.user,
-                pass: smtp.auth.pass,
-            },
-            // Render/Cloud DNS can prefer IPv6 paths that fail for some SMTP providers.
-            // Force IPv4 and tighter timeouts for faster fail/retry behavior.
-            family: 4,
-            connectionTimeout: 60000,
-            greetingTimeout: 45000,
-            socketTimeout: 120000,
-        } as SMTPTransport.Options);
-    }
-
-    // Otherwise, use full SMTP configuration
-    logger.info('Creating SMTP transporter using host/port', {
+    logger.info('Creating SMTP transporter', {
         host: smtp.host,
         port: smtp.port,
         secure: smtp.secure,
     });
+
     return nodemailer.createTransport({
         host: smtp.host,
-        port: smtp.port,
-        secure: smtp.secure, // true for 465, false for other ports
+        port: Number(smtp.port),
+
+        // For Brevo + Render
+        secure: false,
+        requireTLS: true,
+
         auth: {
             user: smtp.auth.user,
             pass: smtp.auth.pass,
         },
+
+        // Force IPv4
         family: 4,
-        connectionTimeout: 60000,
-        greetingTimeout: 45000,
-        socketTimeout: 120000,
-        // Additional options for better compatibility
-        tls: {
-            rejectUnauthorized: false, // Allow self-signed certificates (set to true in production with valid certs)
-        },
+
+        // Better timeout settings
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 20000,
+
+        // Debug logs
+        logger: true,
+        debug: true,
     } as SMTPTransport.Options);
 };
 
-// Create transporter instance
+// Transporter instance
 let transporter: Transporter | null = null;
 
 const getTransporter = (): Transporter => {
     if (!transporter) {
         transporter = createTransporter();
 
-        // Verify connection on first use
+        // Verify SMTP connection
         transporter.verify(error => {
             if (error) {
-                logger.error('SMTP connection verification failed:', error);
+                logger.error('SMTP connection verification failed', {
+                    error: error.message,
+                    stack: error.stack,
+                });
             } else {
                 logger.info('SMTP server is ready to send emails');
             }
         });
     }
+
     return transporter;
 };
 
@@ -89,34 +81,48 @@ export interface EmailOptions {
 
 /**
  * Send email using SMTP
- * @param options Email options
- * @returns Promise with message info
  */
-export const sendMail = async (options: EmailOptions): Promise<any> => {
+export const sendMail = async (
+    options: EmailOptions,
+): Promise<any> => {
     const { from } = EMAIL_CONFIG;
 
     try {
         const mailOptions = {
             from: `"${from.name}" <${from.email}>`,
-            to: Array.isArray(options.to) ? options.to.join(', ') : options.to,
+
+            to: Array.isArray(options.to)
+                ? options.to.join(', ')
+                : options.to,
+
             subject: options.subject,
+
             html: options.html,
-            text: options.text ?? options.html.replace(/<[^>]+>/g, ''),
+
+            text:
+                options.text ??
+                options.html.replace(/<[^>]+>/g, ''),
+
             cc: options.cc
                 ? Array.isArray(options.cc)
                     ? options.cc.join(', ')
                     : options.cc
                 : undefined,
+
             bcc: options.bcc
                 ? Array.isArray(options.bcc)
                     ? options.bcc.join(', ')
                     : options.bcc
                 : undefined,
+
             replyTo: options.replyTo,
+
             attachments: options.attachments,
         };
 
-        const info = await getTransporter().sendMail(mailOptions);
+        const info = await getTransporter().sendMail(
+            mailOptions,
+        );
 
         logger.info('Email sent successfully', {
             to: options.to,
@@ -132,13 +138,13 @@ export const sendMail = async (options: EmailOptions): Promise<any> => {
             error: error.message,
             stack: error.stack,
         });
+
         throw error;
     }
 };
 
 /**
- * Legacy function signature for backward compatibility
- * @deprecated Use sendMail with EmailOptions instead
+ * Legacy function
  */
 export const sendMailLegacy = async (
     to: string,
