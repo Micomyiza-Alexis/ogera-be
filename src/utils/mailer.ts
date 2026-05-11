@@ -1,5 +1,8 @@
 import nodemailer, { Transporter } from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
+import axios from 'axios';
+import { basename } from 'path';
+import { promises as fs } from 'fs';
 import { EMAIL_CONFIG } from '@/config';
 import logger from './logger';
 
@@ -16,10 +19,8 @@ const createTransporter = (): Transporter => {
     return nodemailer.createTransport({
         host: smtp.host,
         port: Number(smtp.port),
-
-        // For Brevo + Render
-        secure: false,
-        requireTLS: true,
+        secure: smtp.secure,
+        requireTLS: !smtp.secure,
 
         auth: {
             user: smtp.auth.user,
@@ -31,9 +32,9 @@ const createTransporter = (): Transporter => {
         greetingTimeout: 10000,
         socketTimeout: 20000,
 
-        // Debug logs
-        logger: true,
-        debug: true,
+        // Keep logs available in non-production only
+        logger: process.env.NODE_ENV !== 'production',
+        debug: process.env.NODE_ENV !== 'production',
     } as SMTPTransport.Options);
 };
 
@@ -43,21 +44,101 @@ let transporter: Transporter | null = null;
 const getTransporter = (): Transporter => {
     if (!transporter) {
         transporter = createTransporter();
-
-        // Verify SMTP connection
-        transporter.verify(error => {
-            if (error) {
-                logger.error('SMTP connection verification failed', {
-                    error: error.message,
-                    stack: error.stack,
-                });
-            } else {
-                logger.info('SMTP server is ready to send emails');
-            }
-        });
     }
 
     return transporter;
+};
+
+type BrevoAttachment = {
+    name: string;
+    content: string;
+};
+
+const toAddressObjects = (value?: string | string[]) => {
+    if (!value) return undefined;
+    const list = Array.isArray(value) ? value : [value];
+    return list.map(email => ({ email }));
+};
+
+const toBrevoAttachments = async (
+    attachments?: EmailOptions['attachments'],
+): Promise<BrevoAttachment[] | undefined> => {
+    if (!attachments?.length) return undefined;
+
+    const formatted = await Promise.all(
+        attachments.map(async file => {
+            if (typeof file.content === 'string') {
+                return {
+                    name: file.filename,
+                    content: Buffer.from(file.content).toString('base64'),
+                };
+            }
+
+            if (Buffer.isBuffer(file.content)) {
+                return {
+                    name: file.filename,
+                    content: file.content.toString('base64'),
+                };
+            }
+
+            if (file.path) {
+                const buffer = await fs.readFile(file.path);
+                return {
+                    name: file.filename || basename(file.path),
+                    content: buffer.toString('base64'),
+                };
+            }
+
+            return null;
+        }),
+    );
+
+    return formatted.filter((item): item is BrevoAttachment => item !== null);
+};
+
+const sendViaBrevoApi = async (options: EmailOptions): Promise<any> => {
+    const { from, brevo } = EMAIL_CONFIG;
+    const apiKey = brevo.apiKey;
+
+    if (!apiKey) {
+        throw new Error('BREVO_API_KEY is not configured');
+    }
+
+    const payload = {
+        sender: {
+            name: from.name,
+            email: from.email,
+        },
+        to: toAddressObjects(options.to),
+        cc: toAddressObjects(options.cc),
+        bcc: toAddressObjects(options.bcc),
+        replyTo: options.replyTo ? { email: options.replyTo } : undefined,
+        subject: options.subject,
+        htmlContent: options.html,
+        textContent: options.text ?? options.html.replace(/<[^>]+>/g, ''),
+        attachment: await toBrevoAttachments(options.attachments),
+    };
+
+    const { data } = await axios.post(
+        brevo.apiUrl,
+        payload,
+        {
+            headers: {
+                'api-key': apiKey,
+                'content-type': 'application/json',
+                accept: 'application/json',
+            },
+            timeout: 15000,
+        },
+    );
+
+    logger.info('Email sent successfully via Brevo API', {
+        to: options.to,
+        subject: options.subject,
+        messageId: data?.messageId,
+    });
+
+    return data;
 };
 
 export interface EmailOptions {
@@ -82,9 +163,13 @@ export interface EmailOptions {
 export const sendMail = async (
     options: EmailOptions,
 ): Promise<any> => {
-    const { from } = EMAIL_CONFIG;
+    const { from, provider } = EMAIL_CONFIG;
 
     try {
+        if (provider === 'brevo_api') {
+            return await sendViaBrevoApi(options);
+        }
+
         const mailOptions = {
             from: `"${from.name}" <${from.email}>`,
 
@@ -129,6 +214,20 @@ export const sendMail = async (
 
         return info;
     } catch (error: any) {
+        const isSmtpConnectivityError =
+            error?.code === 'ETIMEDOUT' ||
+            error?.code === 'ECONNECTION' ||
+            error?.code === 'ECONNREFUSED' ||
+            /Connection timeout|connect|greeting timeout/i.test(error?.message || '');
+
+        if (isSmtpConnectivityError && EMAIL_CONFIG.brevo.apiKey) {
+            logger.warn('SMTP failed, retrying via Brevo API fallback', {
+                code: error?.code,
+                message: error?.message,
+            });
+            return sendViaBrevoApi(options);
+        }
+
         logger.error('Failed to send email', {
             to: options.to,
             subject: options.subject,

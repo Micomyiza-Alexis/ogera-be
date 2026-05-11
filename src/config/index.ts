@@ -43,6 +43,7 @@ export const STORAGE_CONFIG = {
 
 // SMTP/Email configuration
 export const EMAIL_CONFIG = {
+    provider: process.env.EMAIL_PROVIDER || 'smtp',
     // SMTP Configuration
     smtp: {
         host: process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com',
@@ -54,6 +55,10 @@ export const EMAIL_CONFIG = {
         },
         // Optional: Service name (gmail, outlook, etc.) - if provided, nodemailer will use default settings
         service: process.env.SMTP_SERVICE || process.env.EMAIL_SERVICE || undefined,
+    },
+    brevo: {
+        apiKey: process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY || '',
+        apiUrl: process.env.BREVO_API_URL || 'https://api.brevo.com/v3/smtp/email',
     },
     // Email sender information
     from: {
