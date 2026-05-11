@@ -57,8 +57,14 @@ export const EMAIL_CONFIG = {
         service: process.env.SMTP_SERVICE || process.env.EMAIL_SERVICE || undefined,
     },
     brevo: {
-        apiKey: process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY || '',
+        apiKey:
+            process.env.BREVO_API_KEY ||
+            process.env.REVO_API_KEY ||
+            process.env.SENDINBLUE_API_KEY ||
+            '',
         apiUrl: process.env.BREVO_API_URL || 'https://api.brevo.com/v3/smtp/email',
+        senderEmail: process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM || process.env.EMAIL_USER || '',
+        senderName: process.env.BREVO_SENDER_NAME || process.env.EMAIL_FROM_NAME || 'Ogera Support',
     },
     // Email sender information
     from: {
