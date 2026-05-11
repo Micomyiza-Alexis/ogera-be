@@ -26,9 +26,6 @@ const createTransporter = (): Transporter => {
             pass: smtp.auth.pass,
         },
 
-        // Force IPv4
-        family: 4,
-
         // Better timeout settings
         connectionTimeout: 10000,
         greetingTimeout: 10000,
