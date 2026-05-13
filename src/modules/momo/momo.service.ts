@@ -480,7 +480,7 @@ export async function payStudentForJob(jobId: string, userId: string): Promise<{
         funding_status?: string;
         jobApplications?: Array<{
             application_id: string;
-            preferred_payout_currency?: string;
+            // preferred_payout_currency?: string; // Column does not exist in database
             student?: { user_id?: string; mobile_number?: string };
         }>;
     };
@@ -496,9 +496,11 @@ export async function payStudentForJob(jobId: string, userId: string): Promise<{
     const budget = Number(jobAny.budget) || 0;
     if (budget <= 0) throw new Error('Job budget must be greater than zero');
     const jobCurrency = String(jobAny.currency || 'USD').toUpperCase();
-    const payoutCurrency = String(
-        applications[0].preferred_payout_currency || jobCurrency,
-    ).toUpperCase();
+    // Note: preferred_payout_currency column does not exist in database
+    // const payoutCurrency = String(
+    //     applications[0].preferred_payout_currency || jobCurrency,
+    // ).toUpperCase();
+    const payoutCurrency = String(jobCurrency).toUpperCase();
     const payoutAmountInJobCurrency =
         Math.round((budget * (STUDENT_SHARE_PERCENT / 100)) * 1_000_000) / 1_000_000;
 

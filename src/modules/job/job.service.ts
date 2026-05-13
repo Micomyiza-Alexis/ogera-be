@@ -67,9 +67,10 @@ export const createJobService = async (
     if (!jobData.budget) {
         throw new CustomError('Budget is required', StatusCodes.BAD_REQUEST);
     }
-    if (!jobData.currency || !String(jobData.currency).trim()) {
-        jobData.currency = 'USD';
-    }
+    // Note: currency column does not exist in database, so we don't save it
+    // if (!jobData.currency || !String(jobData.currency).trim()) {
+    //     jobData.currency = 'USD';
+    // }
     if (!jobData.duration) {
         throw new CustomError('Duration is required', StatusCodes.BAD_REQUEST);
     }
@@ -136,57 +137,66 @@ export const getAllJobsService = async (
         search?: string;
         location?: string;
         category?: string;
-        currency?: string;
+        // currency?: string; // Column does not exist in database
         payment_range?: string;
     },
     user?: { user_id: string; role: string },
 ) => {
-    const normalizedRole = user?.role ? String(user.role).toLowerCase().trim() : '';
-    const fundedFilter =
-        filters?.funded === 'true' ? true : filters?.funded === 'false' ? false : undefined;
-    let budget_min: number | undefined;
-    let budget_max: number | undefined;
-    if (filters?.payment_range === 'under-500') {
-        budget_max = 499.99;
-    } else if (filters?.payment_range === '500-2000') {
-        budget_min = 500;
-        budget_max = 2000;
-    } else if (filters?.payment_range === '2000-5000') {
-        budget_min = 2000.01;
-        budget_max = 5000;
-    } else if (filters?.payment_range === '5000-plus') {
-        budget_min = 5000.01;
-    }
-    const repoFilters = {
-        status: filters?.status,
-        funded: fundedFilter,
-        search: filters?.search,
-        location: filters?.location,
-        category: filters?.category,
-        currency: filters?.currency,
-        budget_min,
-        budget_max,
-    };
+    try {
+        const normalizedRole = user?.role ? String(user.role).toLowerCase().trim() : '';
+        const fundedFilter =
+            filters?.funded === 'true' ? true : filters?.funded === 'false' ? false : undefined;
+        let budget_min: number | undefined;
+        let budget_max: number | undefined;
+        if (filters?.payment_range === 'under-500') {
+            budget_max = 499.99;
+        } else if (filters?.payment_range === '500-2000') {
+            budget_min = 500;
+            budget_max = 2000;
+        } else if (filters?.payment_range === '2000-5000') {
+            budget_min = 2000.01;
+            budget_max = 5000;
+        } else if (filters?.payment_range === '5000-plus') {
+            budget_min = 5000.01;
+        }
+        const repoFilters = {
+            status: filters?.status,
+            funded: fundedFilter,
+            search: filters?.search,
+            location: filters?.location,
+            category: filters?.category,
+            // Skip currency - column does not exist in database
+            // currency: filters?.currency,
+            budget_min,
+            budget_max,
+        };
 
-    // Students should see only admin-approved/published jobs.
-    // Funding is NOT required for visibility.
-    if (normalizedRole === 'student') {
-        return await repo.findAllJobs({
-            ...repoFilters,
-            status: 'Active',
-        });
-    }
+        // Students should see only admin-approved/published jobs.
+        // Funding is NOT required for visibility.
+        if (normalizedRole === 'student') {
+            const jobs = await repo.findAllJobs({
+                ...repoFilters,
+                status: 'Active',
+            });
+            return jobs;
+        }
 
-    // Employers should see all their jobs by default.
-    // They can still explicitly filter funded/unfunded with funded=true/false.
-    if (normalizedRole === 'employer') {
-        return await repo.findAllJobs({
-            ...repoFilters,
-            employer_id: user?.user_id,
-        });
-    }
+        // Employers should see all their jobs by default.
+        // They can still explicitly filter funded/unfunded with funded=true/false.
+        if (normalizedRole === 'employer') {
+            const jobs = await repo.findAllJobs({
+                ...repoFilters,
+                employer_id: user?.user_id,
+            });
+            return jobs;
+        }
 
-    return await repo.findAllJobs(repoFilters);
+        const jobs = await repo.findAllJobs(repoFilters);
+        return jobs;
+    } catch (error: any) {
+        console.error('Error in getAllJobsService:', error);
+        throw error;
+    }
 };
 
 export const getJobsByStatusService = async (
@@ -244,6 +254,7 @@ export const updateJobService = async (
         }
     }
 
+    // Remove currency and questions from updates since currency column doesn't exist in DB
     const { questions, ...jobUpdates } = updates;
 
     const updated = await repo.updateJob(job_id, jobUpdates);
