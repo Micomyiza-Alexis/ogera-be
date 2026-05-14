@@ -443,7 +443,7 @@ Here are open roles on Ogera right now (${jobs.length} listing${jobs.length === 
 
 ${listText}
 
-Browse all jobs: ${browseJobsUrl}
+Browse all jobs: ${APP_ROOT_URL}
 
 Good luck with your applications.
 
@@ -495,7 +495,7 @@ Open Ogera App: ${APP_ROOT_URL}`;
           <p style="margin:0 0 18px;font-size:14px;line-height:1.65;color:#475569;">Fresh opportunities students can apply for right now. Deadlines and details are on each job page.</p>
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${rows}</table>
           <table role="presentation" cellspacing="0" cellpadding="0" style="margin:22px 0 8px;"><tr>
-            <td style="border-radius:10px;background:#0d9488;"><a href="${esc(browseJobsUrl)}" style="display:inline-block;padding:13px 22px;font-size:14px;font-weight:700;color:#fff;text-decoration:none;">Browse all jobs</a></td>
+            <td style="border-radius:10px;background:#0d9488;"><a href="${APP_ROOT_URL}" style="display:inline-block;padding:13px 22px;font-size:14px;font-weight:700;color:#fff;text-decoration:none;">Browse all jobs</a></td>
           </tr></table>
         </td></tr>
         <tr><td style="padding:18px 20px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;">
@@ -537,7 +537,7 @@ Job: ${jobTitle}
 Task: ${taskTitle}
 Deadline: ${deadlineText}
 
-Open your tasks: ${taskBoardUrl}
+Open your tasks: ${APP_ROOT_URL}
 
 — The Ogera Team
 
@@ -565,7 +565,7 @@ Open Ogera App: ${APP_ROOT_URL}`;
             <p style="margin:0;font-size:13px;color:#475569;"><strong>Deadline:</strong> ${esc(deadlineText)}</p>
           </div>
           <table role="presentation" cellspacing="0" cellpadding="0"><tr>
-            <td style="border-radius:10px;background:#7c3aed;"><a href="${esc(taskBoardUrl)}" style="display:inline-block;padding:13px 22px;font-size:14px;font-weight:700;color:#fff;text-decoration:none;">Open my tasks</a></td>
+            <td style="border-radius:10px;background:#7c3aed;"><a href="${APP_ROOT_URL}" style="display:inline-block;padding:13px 22px;font-size:14px;font-weight:700;color:#fff;text-decoration:none;">Open my tasks</a></td>
           </tr></table>
         </td></tr>
         <tr><td style="padding:16px 22px 22px;background:#fafafa;border-top:1px solid #f3e8ff;">
@@ -611,7 +611,7 @@ Some of your jobs on Ogera still need funding through your Ogera wallet (MTN MoM
 Jobs needing attention:
 ${listText}
 
-Fund or review jobs: ${fundJobsUrl}
+Fund or review jobs: ${APP_ROOT_URL}
 
 — The Ogera Team
 
@@ -649,7 +649,7 @@ Open Ogera App: ${APP_ROOT_URL}`;
           <p style="margin:0 0 18px;font-size:14px;line-height:1.65;color:#475569;">The following postings are not fully funded via your Ogera wallet (MTN MoMo). Complete funding so approved work can move forward without delays.</p>
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#fff7ed;border-radius:10px;overflow:hidden;">${rows}</table>
           <table role="presentation" cellspacing="0" cellpadding="0" style="margin:22px 0 0;"><tr>
-            <td style="border-radius:10px;background:#ea580c;"><a href="${esc(fundJobsUrl)}" style="display:inline-block;padding:13px 22px;font-size:14px;font-weight:700;color:#fff;text-decoration:none;">Review unfunded jobs</a></td>
+            <td style="border-radius:10px;background:#ea580c;"><a href="${APP_ROOT_URL}" style="display:inline-block;padding:13px 22px;font-size:14px;font-weight:700;color:#fff;text-decoration:none;">Review unfunded jobs</a></td>
           </tr></table>
         </td></tr>
         <tr><td style="padding:16px 22px 22px;background:#fffbeb;border-top:1px solid #fde68a;">
