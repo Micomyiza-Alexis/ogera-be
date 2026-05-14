@@ -10,6 +10,11 @@ import {
     JobPostedTemplate,
     ApplicationReceivedTemplate,
     AcademicVerificationStatusTemplate,
+    ActiveJobsDigestEmailTemplate,
+    TaskAssignedEmailTemplate,
+    JobNotFundedReminderEmailTemplate,
+    type DigestJobRow,
+    type UnfundedJobReminderRow,
 } from "@/templete/emailTemplete";
 import { EMAIL_CONFIG } from "@/config";
 import logger from "@/utils/logger";
@@ -30,6 +35,13 @@ export enum EmailType {
     
     // Academic Verification
     ACADEMIC_VERIFICATION_STATUS = "ACADEMIC_VERIFICATION_STATUS",
+
+    /** Periodic digest: active job listings for students */
+    ACTIVE_JOBS_DIGEST = "ACTIVE_JOBS_DIGEST",
+    /** Student: new task assigned on an approved job */
+    TASK_ASSIGNED = "TASK_ASSIGNED",
+    /** Employer: jobs still not funded via wallet / MoMo */
+    JOB_NOT_FUNDED_REMINDER = "JOB_NOT_FUNDED_REMINDER",
     
     // Custom
     CUSTOM = "CUSTOM",
@@ -52,10 +64,27 @@ export interface EmailData {
     jobTitle?: string;
     applicationStatus?: "Accepted" | "Rejected";
     studentName?: string;
+    /** Also used for employer-facing reminders */
     employerName?: string;
     
     // Welcome
     userName?: string;
+    /** student | employer | admin | superAdmin — shapes welcome copy and CTAs */
+    userRoleType?: string;
+
+    /** Active jobs digest (students) */
+    digestJobs?: DigestJobRow[];
+    /** Full URL to jobs browse page; defaults to FRONTEND_URL + /dashboard/jobs/all */
+    browseJobsUrl?: string;
+
+    /** Task assigned notification */
+    taskTitle?: string;
+    taskDeadline?: Date | null;
+    taskUrl?: string;
+
+    /** Unfunded jobs reminder (employers) */
+    unfundedJobs?: UnfundedJobReminderRow[];
+    fundJobsUrl?: string;
     
     // Academic verification
     verificationStatus?: "Approved" | "Rejected";
@@ -128,6 +157,18 @@ class EmailService {
                 case EmailType.ACADEMIC_VERIFICATION_STATUS:
                     emailOptions = this.getAcademicVerificationStatusOptions(data);
                     break;
+
+                case EmailType.ACTIVE_JOBS_DIGEST:
+                    emailOptions = this.getActiveJobsDigestOptions(data);
+                    break;
+
+                case EmailType.TASK_ASSIGNED:
+                    emailOptions = this.getTaskAssignedOptions(data);
+                    break;
+
+                case EmailType.JOB_NOT_FUNDED_REMINDER:
+                    emailOptions = this.getJobNotFundedReminderOptions(data);
+                    break;
                     
                 case EmailType.CUSTOM:
                     emailOptions = this.getCustomEmailOptions(data);
@@ -137,6 +178,41 @@ class EmailService {
                     throw new Error(`Unknown email type: ${type}`);
             }
             
+            // Guarantee an app redirect CTA at the bottom of every email.
+            // Some templates already include it; we avoid duplicating.
+            const APP_ROOT_URL = "https://app.ogera.sybellasystems.co.rw";
+            const footerHtml = `
+  <div style="margin-top:22px;padding:16px 18px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;">
+    <p style="margin:0 0 10px;font-size:13px;color:#475569;line-height:1.5;">
+      Ready to continue? Open Ogera and explore your next step.
+    </p>
+    <a href="${APP_ROOT_URL}"
+      style="display:inline-block;padding:13px 22px;background:#7c3aed;color:#ffffff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;">
+      Open Ogera App
+    </a>
+  </div>`;
+            const footerText = `\n\nOpen Ogera App: ${APP_ROOT_URL}`;
+
+            if (
+                emailOptions?.html &&
+                !emailOptions.html.includes("Open Ogera App") &&
+                typeof emailOptions.html === "string"
+            ) {
+                emailOptions.html = emailOptions.html.includes("</body>")
+                    ? emailOptions.html.replace(
+                          "</body>",
+                          `${footerHtml}</body>`,
+                      )
+                    : `${emailOptions.html}${footerHtml}`;
+            }
+
+            if (
+                emailOptions?.text &&
+                !emailOptions.text.includes("Open Ogera App:")
+            ) {
+                emailOptions.text = `${emailOptions.text}${footerText}`;
+            }
+
             return await sendMail(emailOptions);
         } catch (error: any) {
             logger.error("Email service error", {
@@ -205,11 +281,14 @@ class EmailService {
     }
     
     private getWelcomeEmailOptions(data: EmailData): EmailOptions {
-        const { html, text } = WelcomeEmailTemplate(data.userName || "User");
+        const { html, text } = WelcomeEmailTemplate(data.userName || "User", {
+            roleType: data.userRoleType,
+            frontendBaseUrl: EMAIL_CONFIG.frontendUrl,
+        });
         
         return {
             to: data.to,
-            subject: "Welcome to Ogera!",
+            subject: "Welcome to Ogera — you're in!",
             html,
             text,
             cc: data.cc,
@@ -336,6 +415,85 @@ class EmailService {
             attachments: data.attachments,
         };
     }
+
+    private getActiveJobsDigestOptions(data: EmailData): EmailOptions {
+        const jobs = data.digestJobs ?? [];
+        const browseUrl =
+            data.browseJobsUrl ||
+            `${EMAIL_CONFIG.frontendUrl.replace(/\/$/, "")}/dashboard/jobs/all`;
+        const { html, text } = ActiveJobsDigestEmailTemplate(
+            data.userName || "there",
+            jobs,
+            browseUrl,
+        );
+        const count = jobs.length;
+        return {
+            to: data.to,
+            subject:
+                count === 0
+                    ? "Ogera — open roles digest"
+                    : `Ogera — ${count} open role${count === 1 ? "" : "s"} for you`,
+            html,
+            text,
+            cc: data.cc,
+            bcc: data.bcc,
+            replyTo: data.replyTo,
+            attachments: data.attachments,
+        };
+    }
+
+    private getTaskAssignedOptions(data: EmailData): EmailOptions {
+        if (!data.jobTitle || !data.taskTitle) {
+            throw new Error(
+                "jobTitle and taskTitle are required for task assigned email",
+            );
+        }
+        const taskUrl =
+            data.taskUrl ||
+            `${EMAIL_CONFIG.frontendUrl.replace(/\/$/, "")}/dashboard/tasks`;
+        const { html, text } = TaskAssignedEmailTemplate(
+            data.studentName || data.userName || "there",
+            data.jobTitle,
+            data.taskTitle,
+            data.taskDeadline ?? null,
+            taskUrl,
+        );
+        return {
+            to: data.to,
+            subject: `New task: ${data.taskTitle}`,
+            html,
+            text,
+            cc: data.cc,
+            bcc: data.bcc,
+            replyTo: data.replyTo,
+            attachments: data.attachments,
+        };
+    }
+
+    private getJobNotFundedReminderOptions(data: EmailData): EmailOptions {
+        const jobs = data.unfundedJobs ?? [];
+        if (jobs.length === 0) {
+            throw new Error("unfundedJobs is required for job not funded reminder");
+        }
+        const fundUrl =
+            data.fundJobsUrl ||
+            `${EMAIL_CONFIG.frontendUrl.replace(/\/$/, "")}/dashboard/jobs/unfunded`;
+        const { html, text } = JobNotFundedReminderEmailTemplate(
+            data.userName || data.employerName || "there",
+            jobs,
+            fundUrl,
+        );
+        return {
+            to: data.to,
+            subject: `Action needed: fund ${jobs.length} job${jobs.length === 1 ? "" : "s"} on Ogera`,
+            html,
+            text,
+            cc: data.cc,
+            bcc: data.bcc,
+            replyTo: data.replyTo,
+            attachments: data.attachments,
+        };
+    }
     
     private getCustomEmailOptions(data: EmailData): EmailOptions {
         if (!data.subject || !data.html) {
@@ -393,11 +551,68 @@ export const sendPasswordChanged = async (to: string, userName?: string) => {
     });
 };
 
-export const sendWelcomeEmail = async (to: string, userName?: string) => {
+export const sendWelcomeEmail = async (
+    to: string,
+    userName?: string,
+    userRoleType?: string,
+) => {
     return emailService.sendEmail({
         to,
         type: EmailType.WELCOME,
         userName,
+        userRoleType,
+    });
+};
+
+export const sendActiveJobsDigestEmail = async (
+    to: string,
+    studentName: string,
+    digestJobs: DigestJobRow[],
+    browseJobsUrl?: string,
+) => {
+    return emailService.sendEmail({
+        to,
+        type: EmailType.ACTIVE_JOBS_DIGEST,
+        userName: studentName,
+        digestJobs,
+        browseJobsUrl,
+    });
+};
+
+export const sendTaskAssignedEmail = async (
+    to: string,
+    params: {
+        studentName: string;
+        jobTitle: string;
+        taskTitle: string;
+        taskDeadline?: Date | null;
+        taskUrl?: string;
+    },
+) => {
+    return emailService.sendEmail({
+        to,
+        type: EmailType.TASK_ASSIGNED,
+        studentName: params.studentName,
+        jobTitle: params.jobTitle,
+        taskTitle: params.taskTitle,
+        taskDeadline: params.taskDeadline ?? null,
+        taskUrl: params.taskUrl,
+    });
+};
+
+export const sendJobNotFundedReminderEmail = async (
+    to: string,
+    employerName: string,
+    unfundedJobs: UnfundedJobReminderRow[],
+    fundJobsUrl?: string,
+) => {
+    return emailService.sendEmail({
+        to,
+        type: EmailType.JOB_NOT_FUNDED_REMINDER,
+        userName: employerName,
+        employerName,
+        unfundedJobs,
+        fundJobsUrl,
     });
 };
 

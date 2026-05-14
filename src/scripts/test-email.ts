@@ -6,6 +6,10 @@
  */
 
 import { emailService, EmailType } from '../services/email/email.service';
+import type {
+    DigestJobRow,
+    UnfundedJobReminderRow,
+} from '../templete/emailTemplete';
 import { EMAIL_CONFIG } from '../config';
 import logger from '../utils/logger';
 
@@ -30,12 +34,64 @@ async function testEmailService() {
     
     const tests = [
         {
-            name: 'Welcome Email',
+            name: 'Welcome Email (student)',
             type: EmailType.WELCOME,
             data: {
                 to: testEmail,
                 type: EmailType.WELCOME,
                 userName: 'Test User',
+                userRoleType: 'student',
+            },
+        },
+        {
+            name: 'Active jobs digest',
+            type: EmailType.ACTIVE_JOBS_DIGEST,
+            data: {
+                to: testEmail,
+                type: EmailType.ACTIVE_JOBS_DIGEST,
+                userName: 'Test Student',
+                digestJobs: [
+                    {
+                        job_id: '00000000-0000-4000-8000-000000000099',
+                        job_title: 'Sample listing — design sprint',
+                        location: 'Remote',
+                        category: 'Design',
+                        budget: 280,
+                        currency: 'USD',
+                        duration: '2 weeks',
+                        status: 'Active',
+                        postedAt: new Date(),
+                    },
+                ] satisfies DigestJobRow[],
+            },
+        },
+        {
+            name: 'Task assigned',
+            type: EmailType.TASK_ASSIGNED,
+            data: {
+                to: testEmail,
+                type: EmailType.TASK_ASSIGNED,
+                studentName: 'Test Student',
+                jobTitle: 'Sample job',
+                taskTitle: 'Draft wireframes',
+                taskDeadline: new Date(Date.now() + 3 * 86400000),
+            },
+        },
+        {
+            name: 'Job not funded reminder',
+            type: EmailType.JOB_NOT_FUNDED_REMINDER,
+            data: {
+                to: testEmail,
+                type: EmailType.JOB_NOT_FUNDED_REMINDER,
+                userName: 'Test Employer',
+                unfundedJobs: [
+                    {
+                        job_id: '00000000-0000-4000-8000-000000000088',
+                        job_title: 'Needs MoMo funding',
+                        status: 'Active',
+                        funding_status: 'Unfunded',
+                    },
+                ] satisfies UnfundedJobReminderRow[],
             },
         },
         {

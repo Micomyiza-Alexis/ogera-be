@@ -4,6 +4,9 @@ import { StatusCodes } from "http-status-codes";
 import repo from "./task.repo";
 import { TaskStatus } from "@/interfaces/task.interfaces";
 import { getTrustScoreService } from "@/modules/trustScore/trustScore.service";
+import { sendTaskAssignedEmail } from "@/services/email/email.service";
+import { FRONTEND_URL } from "@/config";
+import logger from "@/utils/logger";
 
 const EMPLOYER_ROLE_TYPES = new Set(["employer", "superAdmin"]);
 const EMPLOYER_ROLE_NAMES = new Set(["employer", "superadmin"]);
@@ -280,6 +283,47 @@ export const createTaskService = async (
   });
 
   const task = await repo.findTaskById(created.task_id);
+  if (!task) {
+    throw new CustomError("Task not found after create", StatusCodes.INTERNAL_SERVER_ERROR);
+  }
+
+  try {
+    const plain = task.get({ plain: true }) as unknown as {
+      title?: string;
+      deadline?: Date | string | null;
+      assignedStudent?: { email?: string; full_name?: string };
+      job?: { job_title?: string };
+    };
+    const studentEmail = plain.assignedStudent?.email;
+    const studentName = plain.assignedStudent?.full_name || "there";
+    const jobTitle = plain.job?.job_title || "Your job";
+    const base = (FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+    const taskUrl = `${base}/dashboard/tasks`;
+    const rawDeadline = plain.deadline;
+    let resolvedDeadline: Date | null = null;
+    if (rawDeadline != null) {
+      const d =
+        rawDeadline instanceof Date
+          ? rawDeadline
+          : new Date(String(rawDeadline));
+      resolvedDeadline = Number.isNaN(d.getTime()) ? null : d;
+    }
+    if (studentEmail) {
+      await sendTaskAssignedEmail(studentEmail, {
+        studentName,
+        jobTitle,
+        taskTitle: String(plain.title || payload.title || "").trim() || "New task",
+        taskDeadline: resolvedDeadline,
+        taskUrl,
+      });
+    }
+  } catch (err: unknown) {
+    logger.error("Failed to send task assigned email", {
+      taskId: created.task_id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   return serializeTask(task);
 };
 

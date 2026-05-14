@@ -75,6 +75,23 @@ export const EMAIL_CONFIG = {
     frontendUrl: FRONTEND_URL || 'http://localhost:5173',
 };
 
+/** 24h-style email digests (student job list + employer unfunded reminders) */
+export const EMAIL_SCHEDULER_CONFIG = {
+    enabled: process.env.EMAIL_DIGEST_SCHEDULER_ENABLED !== 'false',
+    /** Default: every 24 hours (milliseconds) */
+    intervalMs: parseInt(
+        process.env.EMAIL_DIGEST_INTERVAL_MS || String(24 * 60 * 60 * 1000),
+        10,
+    ),
+    maxJobsPerDigest: parseInt(process.env.EMAIL_DIGEST_MAX_JOBS || '50', 10),
+    /** If true, runs one cycle shortly after server start (default false) */
+    runOnStart: process.env.EMAIL_DIGEST_RUN_ON_START === 'true',
+
+    /** Daily schedule time (server local time) */
+    dailyHour: parseInt(process.env.EMAIL_DIGEST_DAILY_HOUR || '13', 10),
+    dailyMinute: parseInt(process.env.EMAIL_DIGEST_DAILY_MINUTE || '0', 10),
+};
+
 // Pesapal Payment Configuration
 export const PESAPAL_CONFIG = {
     consumerKey: process.env.PESAPAL_CONSUMER_KEY || '',

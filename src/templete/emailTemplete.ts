@@ -1,3 +1,26 @@
+/** Escape text for safe HTML email interpolation. */
+const esc = (raw: string | number | null | undefined) =>
+    String(raw ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+// Footer CTA: all onboarding + list emails should end with an app redirect button.
+const APP_ROOT_URL = "https://app.ogera.sybellasystems.co.rw";
+const renderAppFooterHtml = () => `
+  <div style="margin-top:22px;padding:16px 18px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;">
+    <p style="margin:0 0 10px;font-size:13px;color:#475569;line-height:1.5;">
+      Ready to continue? Open Ogera and explore your next step.
+    </p>
+    <a href="${esc(APP_ROOT_URL)}"
+      style="display:inline-block;padding:13px 22px;background:#7c3aed;color:#ffffff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;">
+      Open Ogera App
+    </a>
+  </div>
+`;
+
 export const EmailTemplete = (otp: string, expiry: Date) => {
     const expiryText = expiry.toLocaleString('en-US', {
         dateStyle: 'full',
@@ -135,7 +158,9 @@ ${
 }
 
 Thank you for your interest,
-The Ogera Team`;
+The Ogera Team
+
+Open Ogera App: ${APP_ROOT_URL}`;
 
     const html = `
   <div style="font-family: Arial, sans-serif; background: #f9f9f9; padding: 20px;">
@@ -162,6 +187,7 @@ The Ogera Team`;
       <p style="color: #333; font-size: 16px;">
         Thank you for your interest,<br/>The <b>Ogera Team</b>
       </p>
+      ${renderAppFooterHtml()}
     </div>
   </div>
   `;
@@ -169,57 +195,475 @@ The Ogera Team`;
     return { text, html };
 };
 
-// Welcome Email Template
-export const WelcomeEmailTemplate = (userName: string) => {
-    const text = `Hello ${userName},
+export type WelcomeEmailRoleType =
+    | 'student'
+    | 'employer'
+    | 'admin'
+    | 'superAdmin'
+    | string;
 
-Welcome to Ogera! We're excited to have you join our platform.
+export interface WelcomeEmailTemplateOptions {
+    roleType?: WelcomeEmailRoleType;
+    /** Base URL of the web app (no trailing slash), e.g. https://app.example.com */
+    frontendBaseUrl?: string;
+}
 
-Your account has been successfully created. You can now:
-- Browse and apply for job opportunities
-- Create and manage your profile
-- Connect with employers
-- Track your applications
+// Welcome Email Template — rich onboarding with clear next steps and CTAs
+export const WelcomeEmailTemplate = (
+    userName: string,
+    options?: WelcomeEmailTemplateOptions,
+) => {
+    const safeName = esc(userName);
+    const base = (options?.frontendBaseUrl || 'http://localhost:5173').replace(
+        /\/$/,
+        '',
+    );
+    const role = String(options?.roleType || 'student').toLowerCase();
+    const isStudent = role === 'student';
+    const isEmployer = role === 'employer';
+    const isAdminLike =
+        role === 'admin' ||
+        role === 'superadmin' ||
+        role.includes('admin');
 
-If you have any questions, feel free to reach out to our support team.
+    const primaryCtaHref = isStudent
+        ? `${base}/dashboard/jobs/all`
+        : isEmployer
+        ? `${base}/dashboard/jobs/unfunded`
+        : `${base}/dashboard`;
+    const primaryCtaLabel = isStudent
+        ? 'Explore open roles'
+        : isEmployer
+        ? 'Go to your jobs'
+        : 'Open dashboard';
 
-Thank you for choosing Ogera!
+    const secondaryCtaHref = isStudent
+        ? `${base}/dashboard/tasks`
+        : isEmployer
+        ? `${base}/dashboard/jobs/all`
+        : `${base}/dashboard`;
+    const secondaryCtaLabel = isStudent
+        ? 'My tasks'
+        : isEmployer
+        ? 'Manage job posts'
+        : 'Notifications';
 
-Best regards,
-The Ogera Team`;
+    let roleBulletsText: string;
+    let roleBulletsHtml: string;
+    if (isStudent) {
+        roleBulletsText = [
+            '- Complete your profile and academic verification to stand out',
+            '- Browse curated roles and apply in a few clicks',
+            '- Track applications and collaborate on tasks in one place',
+            '- Build your trust score as you deliver great work',
+        ].join('\n');
+        roleBulletsHtml = `
+        <ul style="margin:0;padding-left:20px;color:#334155;font-size:15px;line-height:1.65;">
+          <li>Complete your profile and academic verification to stand out.</li>
+          <li>Browse curated roles and apply in a few clicks.</li>
+          <li>Track applications and collaborate on tasks in one place.</li>
+          <li>Build your trust score as you deliver great work.</li>
+        </ul>`;
+    } else if (isEmployer) {
+        roleBulletsText = [
+            '- Publish roles and reach motivated student talent',
+            '- Fund jobs via your Ogera wallet (MTN MoMo) so work can start smoothly',
+            '- Review applications, assign tasks, and pay with confidence',
+        ].join('\n');
+        roleBulletsHtml = `
+        <ul style="margin:0;padding-left:20px;color:#334155;font-size:15px;line-height:1.65;">
+          <li>Publish roles and reach motivated student talent.</li>
+          <li>Fund jobs via your Ogera wallet (MTN MoMo) so work can start smoothly.</li>
+          <li>Review applications, assign tasks, and pay with confidence.</li>
+        </ul>`;
+    } else if (isAdminLike) {
+        roleBulletsText = [
+            '- Review platform activity and keep quality high',
+            '- Publish jobs after review so students see trusted listings',
+            '- Reach users through official notifications when needed',
+        ].join('\n');
+        roleBulletsHtml = `
+        <ul style="margin:0;padding-left:20px;color:#334155;font-size:15px;line-height:1.65;">
+          <li>Review platform activity and keep quality high.</li>
+          <li>Publish jobs after review so students see trusted listings.</li>
+          <li>Reach users through official notifications when needed.</li>
+        </ul>`;
+    } else {
+        roleBulletsText = [
+            '- Explore the dashboard tailored to your role',
+            '- Complete any pending verification steps',
+            '- Reach out if you need help getting started',
+        ].join('\n');
+        roleBulletsHtml = `
+        <ul style="margin:0;padding-left:20px;color:#334155;font-size:15px;line-height:1.65;">
+          <li>Explore the dashboard tailored to your role.</li>
+          <li>Complete any pending verification steps.</li>
+          <li>Reach out if you need help getting started.</li>
+        </ul>`;
+    }
+
+    const text = `Welcome to Ogera 🚀
+
+We’re excited to have you here and officially welcome you to the growing Ogera community, proudly built by Sybella Systems — a company committed to engineering Africa’s digital future.
+
+Ogera is still in active development, which means you may notice:
+* Features changing regularly
+* New updates being released often
+* Some things not yet fully polished
+* Areas that may feel unclear or incomplete
+And that’s okay. We are working every day to build the best possible platform for students, employers, and African talent.
+
+Your early support means a lot because you are helping shape what Ogera becomes.
+As we continue improving the platform, we encourage you to:
+* Explore the system
+* Test features
+* Report bugs or issues
+* Share ideas and feedback
+* Invite your friends and classmates to join the movement
+
+Your feedback is one of the most important parts of this journey.
+Please also join our WhatsApp community group to stay updated, ask questions, share suggestions, and connect with other early users.
+
+Thank you for believing in Ogera early. This is only the beginning, and we’re building it together. 💙
+
+Open Ogera App: ${APP_ROOT_URL}`;
 
     const html = `
-  <div style="font-family: Arial, sans-serif; background: #f9f9f9; padding: 20px;">
-    <div style="max-width: 600px; margin: auto; background: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1);">
-      <h2 style="color: #333; text-align: center;">Welcome to Ogera!</h2>
-      <p style="color: #555; font-size: 16px;">
-        Hello ${userName},
-      </p>
-      <p style="color: #555; font-size: 16px;">
-        We're excited to have you join our platform. Your account has been successfully created.
-      </p>
-      <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-        <p style="color: #333; font-size: 16px; margin: 10px 0;">
-          <strong>You can now:</strong>
-        </p>
-        <ul style="color: #555; font-size: 16px; padding-left: 20px;">
-          <li>Browse and apply for job opportunities</li>
-          <li>Create and manage your profile</li>
-          <li>Connect with employers</li>
-          <li>Track your applications</li>
-        </ul>
-      </div>
-      <p style="color: #555; font-size: 16px;">
-        If you have any questions, feel free to reach out to our support team.
-      </p>
-      <br/>
-      <p style="color: #333; font-size: 16px;">
-        Thank you for choosing Ogera!<br/>
-        Best regards,<br/>The <b>Ogera Team</b>
-      </p>
-    </div>
-  </div>
-  `;
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f5f7ff;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f5f7ff;padding:28px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e5e7eb;box-shadow:0 10px 40px rgba(79,70,229,0.08);">
+          <tr>
+            <td style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 50%,#6d28d9 100%);padding:30px 26px 24px;">
+              <p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:.18em;color:rgba(255,255,255,0.9);text-transform:uppercase;">Ogera</p>
+              <p style="margin:0;font-size:26px;font-weight:800;line-height:1.25;color:#ffffff;">Welcome to Ogera 🚀</p>
+              <p style="margin:12px 0 0;font-size:14px;line-height:1.6;color:rgba(255,255,255,0.92);">Officially welcoming you to the growing Ogera community.</p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:26px 26px 8px;">
+              <p style="margin:0 0 16px;font-size:14px;line-height:1.8;color:#475569;">
+                We’re excited to have you here and officially welcome you to the growing Ogera community, proudly built by Sybella Systems — a company committed to engineering Africa’s digital future.
+              </p>
+
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:18px 16px;margin:0 0 18px;">
+                <p style="margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:.1em;color:#64748b;text-transform:uppercase;">Ogera is still evolving</p>
+                <p style="margin:0 0 12px;font-size:14px;line-height:1.65;color:#475569;">Ogera is still in active development, which means you may notice:</p>
+                <ul style="margin:0;padding-left:18px;color:#334155;font-size:14px;line-height:1.7;">
+                  <li>Features changing regularly</li>
+                  <li>New updates being released often</li>
+                  <li>Some things not yet fully polished</li>
+                  <li>Areas that may feel unclear or incomplete</li>
+                </ul>
+                <p style="margin:12px 0 0;font-size:14px;line-height:1.65;color:#475569;">And that’s okay. We are working every day to build the best possible platform for students, employers, and African talent.</p>
+              </div>
+
+              <p style="margin:0 0 12px;font-size:14px;line-height:1.65;color:#475569;">
+                Your early support means a lot because you are helping shape what Ogera becomes.
+              </p>
+
+              <p style="margin:0 0 10px;font-size:14px;font-weight:700;color:#0f172a;">As we continue improving the platform, we encourage you to:</p>
+              <ul style="margin:0 0 18px;padding-left:18px;color:#334155;font-size:14px;line-height:1.7;">
+                <li>Explore the system</li>
+                <li>Test features</li>
+                <li>Report bugs or issues</li>
+                <li>Share ideas and feedback</li>
+                <li>Invite your friends and classmates to join the movement</li>
+              </ul>
+
+              <div style="background:#eef2ff;border:1px solid #e0e7ff;border-radius:12px;padding:16px 14px;margin:0 0 18px;">
+                <p style="margin:0;font-size:14px;line-height:1.65;color:#3730a3;">
+                  Your feedback is one of the most important parts of this journey.
+                  Please also join our WhatsApp community group to stay updated, ask questions, share suggestions, and connect with other early users.
+                </p>
+              </div>
+
+              <p style="margin:0 0 12px;font-size:14px;line-height:1.65;color:#475569;">
+                Thank you for believing in Ogera early. This is only the beginning, and we’re building it together. 💙
+              </p>
+
+              ${renderAppFooterHtml()}
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:18px 26px 22px;background:#f8fafc;border-top:1px solid #e2e8f0;">
+              <p style="margin:0;font-size:13px;line-height:1.6;color:#64748b;">© ${new Date().getFullYear()} Ogera</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+    return { text, html };
+};
+
+export interface DigestJobRow {
+    job_id: string;
+    job_title: string;
+    location: string;
+    category: string;
+    budget: number;
+    currency: string;
+    duration: string;
+    status: string;
+    postedAt: Date;
+}
+
+/** Daily / periodic digest: active jobs for students */
+export const ActiveJobsDigestEmailTemplate = (
+    studentName: string,
+    jobs: DigestJobRow[],
+    browseJobsUrl: string,
+) => {
+    const safeName = esc(studentName);
+    const when = new Date();
+    const whenText = when.toLocaleString('en-US', {
+        dateStyle: 'full',
+        timeStyle: 'short',
+    });
+    const listText = jobs
+        .map(
+            (j, i) =>
+                `${i + 1}. ${j.job_title}\n   ${j.location} · ${j.category} · ${j.currency} ${j.budget} · ${j.duration}\n   Posted: ${j.postedAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}\n   ${browseJobsUrl.replace(/\/$/, '')}/dashboard/jobs/${j.job_id}`,
+        )
+        .join('\n\n');
+
+    const text = `Hello ${studentName},
+
+Here are open roles on Ogera right now (${jobs.length} listing${jobs.length === 1 ? '' : 's'}). This digest was prepared on ${whenText}.
+
+${listText}
+
+Browse all jobs: ${browseJobsUrl}
+
+Good luck with your applications.
+
+— The Ogera Team
+
+Open Ogera App: ${APP_ROOT_URL}`;
+
+    const rows =
+        jobs.length === 0
+            ? `<tr><td style="padding:20px;color:#64748b;font-size:14px;">No active listings matched this digest. Check back soon.</td></tr>`
+            : jobs
+                  .map(j => {
+                      const posted = esc(
+                          j.postedAt.toLocaleString('en-US', {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                          }),
+                      );
+                      const detailUrl = `${esc(browseJobsUrl.replace(/\/$/, ''))}/dashboard/jobs/${esc(j.job_id)}`;
+                      return `
+            <tr>
+              <td style="padding:14px 12px;border-bottom:1px solid #e2e8f0;vertical-align:top;">
+                <p style="margin:0 0 6px;font-size:16px;font-weight:700;color:#0f172a;">${esc(j.job_title)}</p>
+                <p style="margin:0 0 8px;font-size:13px;line-height:1.5;color:#475569;">${esc(j.location)} · ${esc(j.category)}</p>
+                <p style="margin:0 0 8px;font-size:13px;color:#334155;"><strong>${esc(j.currency)} ${esc(String(j.budget))}</strong> · ${esc(j.duration)} · <span style="color:#059669;">${esc(j.status)}</span></p>
+                <p style="margin:0 0 10px;font-size:12px;color:#64748b;">Posted: ${posted}</p>
+                <a href="${detailUrl}" style="display:inline-block;font-size:13px;font-weight:700;color:#5b21b6;text-decoration:none;">View job →</a>
+              </td>
+            </tr>`;
+                  })
+                  .join('');
+
+    const html = `
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 10px;background:#f1f5f9;">
+    <tr><td align="center">
+      <table role="presentation" width="600" style="max-width:600px;background:#fff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0;">
+        <tr>
+          <td style="background:linear-gradient(135deg,#0d9488,#059669);padding:26px 24px;">
+            <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:.15em;color:rgba(255,255,255,0.85);text-transform:uppercase;">Jobs digest</p>
+            <p style="margin:8px 0 0;font-size:22px;font-weight:800;color:#fff;line-height:1.25;">Open roles on Ogera</p>
+            <p style="margin:10px 0 0;font-size:14px;color:rgba(255,255,255,0.92);">${esc(whenText)}</p>
+          </td>
+        </tr>
+        <tr><td style="padding:22px 20px 8px;">
+          <p style="margin:0 0 16px;font-size:16px;color:#0f172a;">Hi <strong>${safeName}</strong>,</p>
+          <p style="margin:0 0 18px;font-size:14px;line-height:1.65;color:#475569;">Fresh opportunities students can apply for right now. Deadlines and details are on each job page.</p>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${rows}</table>
+          <table role="presentation" cellspacing="0" cellpadding="0" style="margin:22px 0 8px;"><tr>
+            <td style="border-radius:10px;background:#0d9488;"><a href="${esc(browseJobsUrl)}" style="display:inline-block;padding:13px 22px;font-size:14px;font-weight:700;color:#fff;text-decoration:none;">Browse all jobs</a></td>
+          </tr></table>
+        </td></tr>
+        <tr><td style="padding:18px 20px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">You receive this because you have a student account on Ogera. Listings reflect jobs that are currently active on the platform.</p>
+        </td></tr>
+        <tr>
+          <td style="padding:14px 20px 24px;">
+            ${renderAppFooterHtml()}
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+    return { text, html };
+};
+
+/** Employer: task created for an approved student */
+export const TaskAssignedEmailTemplate = (
+    studentName: string,
+    jobTitle: string,
+    taskTitle: string,
+    deadline: Date | null,
+    taskBoardUrl: string,
+) => {
+    const deadlineText = deadline
+        ? deadline.toLocaleString('en-US', {
+              dateStyle: 'full',
+              timeStyle: 'short',
+          })
+        : 'No deadline set yet — check the task for details.';
+
+    const text = `Hello ${studentName},
+
+You have a new task assigned on Ogera.
+
+Job: ${jobTitle}
+Task: ${taskTitle}
+Deadline: ${deadlineText}
+
+Open your tasks: ${taskBoardUrl}
+
+— The Ogera Team
+
+Open Ogera App: ${APP_ROOT_URL}`;
+
+    const html = `
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/></head>
+<body style="margin:0;padding:0;background:#faf5ff;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 10px;">
+    <tr><td align="center">
+      <table role="presentation" width="600" style="max-width:600px;background:#fff;border-radius:14px;border:1px solid #e9d5ff;overflow:hidden;">
+        <tr><td style="background:#7c3aed;padding:24px 22px;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:.12em;color:rgba(255,255,255,0.88);text-transform:uppercase;">New assignment</p>
+          <p style="margin:8px 0 0;font-size:21px;font-weight:800;color:#fff;">A task is ready for you</p>
+        </td></tr>
+        <tr><td style="padding:24px 22px;">
+          <p style="margin:0 0 14px;font-size:16px;color:#0f172a;">Hi <strong>${esc(studentName)}</strong>,</p>
+          <p style="margin:0 0 18px;font-size:14px;line-height:1.65;color:#475569;">Your employer posted a task under a job you're approved for. Review the brief and start when you're ready.</p>
+          <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:12px;padding:18px 16px;margin:0 0 20px;">
+            <p style="margin:0 0 8px;font-size:13px;color:#6b21a8;font-weight:700;text-transform:uppercase;letter-spacing:.06em;">Job</p>
+            <p style="margin:0 0 14px;font-size:17px;font-weight:700;color:#1e1b4b;">${esc(jobTitle)}</p>
+            <p style="margin:0 0 6px;font-size:13px;color:#6b21a8;font-weight:700;text-transform:uppercase;letter-spacing:.06em;">Task</p>
+            <p style="margin:0 0 14px;font-size:16px;color:#312e81;">${esc(taskTitle)}</p>
+            <p style="margin:0;font-size:13px;color:#475569;"><strong>Deadline:</strong> ${esc(deadlineText)}</p>
+          </div>
+          <table role="presentation" cellspacing="0" cellpadding="0"><tr>
+            <td style="border-radius:10px;background:#7c3aed;"><a href="${esc(taskBoardUrl)}" style="display:inline-block;padding:13px 22px;font-size:14px;font-weight:700;color:#fff;text-decoration:none;">Open my tasks</a></td>
+          </tr></table>
+        </td></tr>
+        <tr><td style="padding:16px 22px 22px;background:#fafafa;border-top:1px solid #f3e8ff;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">Questions? Reply via the job thread or contact support from your dashboard.</p>
+        </td></tr>
+        <tr>
+          <td style="padding:0 22px 22px;">
+            ${renderAppFooterHtml()}
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+    return { text, html };
+};
+
+export interface UnfundedJobReminderRow {
+    job_id: string;
+    job_title: string;
+    status: string;
+    funding_status: string | null;
+}
+
+/** Employer reminder: jobs not funded via MoMa / Ogera wallet */
+export const JobNotFundedReminderEmailTemplate = (
+    employerName: string,
+    jobs: UnfundedJobReminderRow[],
+    fundJobsUrl: string,
+) => {
+    const listText = jobs
+        .map(
+            (j, i) =>
+                `${i + 1}. ${j.job_title} (status: ${j.status}, funding: ${j.funding_status || 'Unfunded'})`,
+        )
+        .join('\n');
+
+    const text = `Hello ${employerName},
+
+Some of your jobs on Ogera still need funding through your Ogera wallet (MTN MoMo) before students can be paid and work can progress smoothly.
+
+Jobs needing attention:
+${listText}
+
+Fund or review jobs: ${fundJobsUrl}
+
+— The Ogera Team
+
+Open Ogera App: ${APP_ROOT_URL}`;
+
+    const rows =
+        jobs.length === 0
+            ? ''
+            : jobs
+                  .map(
+                      j => `
+        <tr>
+          <td style="padding:12px 10px;border-bottom:1px solid #fee2e2;">
+            <p style="margin:0;font-size:15px;font-weight:700;color:#7f1d1d;">${esc(j.job_title)}</p>
+            <p style="margin:6px 0 0;font-size:12px;color:#991b1b;">Status: ${esc(j.status)} · Funding: ${esc(j.funding_status || 'Unfunded')}</p>
+          </td>
+        </tr>`,
+                  )
+                  .join('');
+
+    const html = `
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/></head>
+<body style="margin:0;padding:0;background:#fff7ed;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 10px;">
+    <tr><td align="center">
+      <table role="presentation" width="600" style="max-width:600px;background:#fff;border-radius:14px;border:1px solid #fed7aa;overflow:hidden;">
+        <tr><td style="background:linear-gradient(135deg,#ea580c,#f97316);padding:24px 22px;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:.12em;color:rgba(255,255,255,0.9);text-transform:uppercase;">Wallet & funding</p>
+          <p style="margin:8px 0 0;font-size:21px;font-weight:800;color:#fff;">Fund your jobs on Ogera</p>
+          <p style="margin:10px 0 0;font-size:14px;color:rgba(255,255,255,0.95);">Students rely on funded escrow so tasks and payouts stay fair and predictable.</p>
+        </td></tr>
+        <tr><td style="padding:24px 22px;">
+          <p style="margin:0 0 14px;font-size:16px;color:#0f172a;">Hi <strong>${esc(employerName)}</strong>,</p>
+          <p style="margin:0 0 18px;font-size:14px;line-height:1.65;color:#475569;">The following postings are not fully funded via your Ogera wallet (MTN MoMo). Complete funding so approved work can move forward without delays.</p>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#fff7ed;border-radius:10px;overflow:hidden;">${rows}</table>
+          <table role="presentation" cellspacing="0" cellpadding="0" style="margin:22px 0 0;"><tr>
+            <td style="border-radius:10px;background:#ea580c;"><a href="${esc(fundJobsUrl)}" style="display:inline-block;padding:13px 22px;font-size:14px;font-weight:700;color:#fff;text-decoration:none;">Review unfunded jobs</a></td>
+          </tr></table>
+        </td></tr>
+        <tr><td style="padding:16px 22px 22px;background:#fffbeb;border-top:1px solid #fde68a;">
+          <p style="margin:0;font-size:12px;color:#92400e;">This is an automated reminder. If you already funded, refresh your dashboard — it can take a moment to sync.</p>
+        </td></tr>
+        <tr>
+          <td style="padding:0 22px 22px;">
+            ${renderAppFooterHtml()}
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
 
     return { text, html };
 };
@@ -357,7 +801,9 @@ Students can now view and apply for this position. You will receive notification
 Thank you for using Ogera!
 
 Best regards,
-The Ogera Team`;
+The Ogera Team
+
+Open Ogera App: ${APP_ROOT_URL}`;
 
     const html = `
   <div style="font-family: Arial, sans-serif; background: #f9f9f9; padding: 20px;">
@@ -382,6 +828,7 @@ The Ogera Team`;
         Thank you for using Ogera!<br/>
         Best regards,<br/>The <b>Ogera Team</b>
       </p>
+      ${renderAppFooterHtml()}
     </div>
   </div>
   `;
@@ -405,7 +852,9 @@ Applicant: ${studentName}
 Please review the application in your dashboard.
 
 Thank you,
-The Ogera Team`;
+The Ogera Team
+
+Open Ogera App: ${APP_ROOT_URL}`;
 
     const html = `
   <div style="font-family: Arial, sans-serif; background: #f9f9f9; padding: 20px;">
@@ -432,6 +881,7 @@ The Ogera Team`;
       <p style="color: #333; font-size: 16px;">
         Thank you,<br/>The <b>Ogera Team</b>
       </p>
+      ${renderAppFooterHtml()}
     </div>
   </div>
   `;
