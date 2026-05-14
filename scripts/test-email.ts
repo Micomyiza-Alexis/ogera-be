@@ -17,7 +17,14 @@ import path from 'path';
 const envFile = path.join(__dirname, '../.env.development');
 config({ path: envFile });
 
-import { emailService, EmailType } from '../src/services/email/email.service';
+import {
+    emailService,
+    EmailType,
+} from '../src/services/email/email.service';
+import type {
+    DigestJobRow,
+    UnfundedJobReminderRow,
+} from '../src/templete/emailTemplete';
 import logger from '../src/utils/logger';
 
 async function testEmail() {
@@ -56,8 +63,72 @@ async function testEmail() {
         });
         console.log('   ✅ Welcome email sent successfully!\n');
 
-        // Test 2: Custom Email
-        console.log('2️⃣  Sending Custom Email...');
+        // Test 2: Active jobs digest (sample listings)
+        console.log('2️⃣  Sending active jobs digest (sample data)...');
+        const sampleJobs: DigestJobRow[] = [
+            {
+                job_id: '00000000-0000-4000-8000-000000000001',
+                job_title: 'Frontend intern — React dashboard',
+                location: 'Remote · East Africa',
+                category: 'Engineering',
+                budget: 450,
+                currency: 'USD',
+                duration: '6 weeks',
+                status: 'Active',
+                postedAt: new Date(),
+            },
+            {
+                job_id: '00000000-0000-4000-8000-000000000002',
+                job_title: 'Data cleaning & reporting',
+                location: 'Kigali',
+                category: 'Data',
+                budget: 320,
+                currency: 'USD',
+                duration: '3 weeks',
+                status: 'Active',
+                postedAt: new Date(Date.now() - 86400000),
+            },
+        ];
+        await emailService.sendEmail({
+            to: recipientEmail,
+            type: EmailType.ACTIVE_JOBS_DIGEST,
+            userName: 'Alex Student',
+            digestJobs: sampleJobs,
+        });
+        console.log('   ✅ Digest email sent successfully!\n');
+
+        // Test 3: Task assigned
+        console.log('3️⃣  Sending task assigned email...');
+        await emailService.sendEmail({
+            to: recipientEmail,
+            type: EmailType.TASK_ASSIGNED,
+            studentName: 'Alex Student',
+            jobTitle: 'Frontend intern — React dashboard',
+            taskTitle: 'Implement applicant filters on jobs list',
+            taskDeadline: new Date(Date.now() + 7 * 86400000),
+        });
+        console.log('   ✅ Task assigned email sent successfully!\n');
+
+        // Test 4: Job not funded reminder
+        console.log('4️⃣  Sending job not funded reminder...');
+        const unfunded: UnfundedJobReminderRow[] = [
+            {
+                job_id: '00000000-0000-4000-8000-000000000003',
+                job_title: 'Mobile UX research sprint',
+                status: 'Active',
+                funding_status: 'Unfunded',
+            },
+        ];
+        await emailService.sendEmail({
+            to: recipientEmail,
+            type: EmailType.JOB_NOT_FUNDED_REMINDER,
+            userName: 'Jordan Employer',
+            unfundedJobs: unfunded,
+        });
+        console.log('   ✅ Unfunded reminder sent successfully!\n');
+
+        // Test 5: Custom Email
+        console.log('5️⃣  Sending Custom Email...');
         await emailService.sendEmail({
             to: recipientEmail,
             type: EmailType.CUSTOM,

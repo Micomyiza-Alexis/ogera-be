@@ -13,6 +13,7 @@ import {
     EmailTemplete,
     EmailVerificationTemplate,
 } from '@/templete/emailTemplete';
+import { sendWelcomeEmail } from '@/services/email/email.service';
 import { PaginationQuery } from '@/interfaces/pagination.interfaces';
 import { User } from '@/interfaces/user.interfaces';
 import { DB } from '@/database';
@@ -258,6 +259,16 @@ export const registerUser = async (data: any, frontendOrigin?: string) => {
         console.error('Failed to send verification email:', error);
     }
 
+    try {
+        await sendWelcomeEmail(
+            data.email,
+            user.full_name?.trim() || data.full_name?.trim() || 'there',
+            role.roleType,
+        );
+    } catch (error) {
+        console.error('Failed to send welcome email:', error);
+    }
+
     // Save selected category as a skill (students only, from signup step 2)
     if (typeof data.category === 'string' && data.category.trim()) {
         try {
@@ -370,6 +381,16 @@ export const addUser = async (data: any) => {
     } catch (error) {
         // Log error but don't fail user creation
         console.error('Failed to send verification email:', error);
+    }
+
+    try {
+        await sendWelcomeEmail(
+            data.email,
+            user.full_name?.trim() || data.full_name?.trim() || 'there',
+            role.roleType,
+        );
+    } catch (error) {
+        console.error('Failed to send welcome email:', error);
     }
 
     return { user: sanitizeUser(user) };
