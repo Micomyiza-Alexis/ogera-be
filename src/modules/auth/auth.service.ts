@@ -1000,7 +1000,7 @@ export const resetPasswordService = async (
 };
 
 export const getAllUsersService = async (
-    { page, limit, type }: PaginationQuery & { type?: string },
+    { page, limit, type, search }: PaginationQuery & { type?: string; search?: string },
     _currentUserRole?: string,
     roleWhere?: any,
 ) => {
@@ -1043,6 +1043,7 @@ export const getAllUsersService = async (
         page,
         limit,
         roleWhere: whereCondition,
+        search, // Pass search parameter to repository
     });
 
     console.log('rows', rows);
