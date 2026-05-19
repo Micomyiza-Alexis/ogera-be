@@ -28,12 +28,13 @@ export const getAllUsers = async (req: Request, res: Response) => {
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 10;
         const type = req.query.type as string | undefined;
+        const search = (req.query.search as string) || undefined; // Add search parameter
 
         // Get current user's role to determine if admin roles should be excluded
         const currentUserRole = req.user?.role;
 
         const { data, pagination, counts } = await getAllUsersService(
-            { page, limit, type },
+            { page, limit, type, search }, // Pass search to service
             currentUserRole,
         );
 
@@ -60,9 +61,10 @@ export const getAllStudents = async (req: Request, res: Response) => {
     try {
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 10;
+        const search = (req.query.search as string) || undefined; // Add search parameter
 
         const { data, pagination } = await getAllUsersService(
-            { page, limit, type: 'Student' },
+            { page, limit, type: 'Student', search }, // Pass search to service
             req.user?.role,
         );
 
@@ -249,9 +251,10 @@ export const getAllEmployers = async (req: Request, res: Response) => {
     try {
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 10;
+        const search = (req.query.search as string) || undefined; // Add search parameter
 
         const { data, pagination } = await getAllUsersService(
-            { page, limit, type: 'Employer' },
+            { page, limit, type: 'Employer', search }, // Pass search to service
             req.user?.role,
         );
 

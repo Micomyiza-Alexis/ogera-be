@@ -999,10 +999,12 @@ export const getAllSubAdmins = async (req: Request, res: Response) => {
     try {
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 10;
+        const search = (req.query.search as string) || undefined;
 
         const { data, pagination } = await getAllSubAdminsService({
             page,
             limit,
+            search,
         });
 
         res.status(StatusCodes.OK).json({

@@ -45,7 +45,8 @@ export const createPermission = async (
 
 export const getAllPermissions = async (_req: Request, res: Response) => {
     try {
-        const permissions = await permissionService.getAllPermissions();
+        const search = (_req.query.search as string) || undefined;
+        const permissions = await permissionService.getAllPermissions(search);
         res.status(StatusCodes.OK).json({
             success: true,
             message: 'Permissions retrieved successfully',

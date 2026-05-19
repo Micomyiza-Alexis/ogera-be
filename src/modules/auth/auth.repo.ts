@@ -28,11 +28,13 @@ const repo = {
         limit,
         roleWhere,
         type,
+        search,
     }: {
         page: number;
         limit: number;
         roleWhere?: any;
         type?: 'student' | 'employer';
+        search?: string;
     }): Promise<{
         rows: User[];
         count: number;
@@ -50,7 +52,19 @@ const repo = {
             includeOptions.where = { roleType: type };
         }
 
+        // Build where conditions for the Users table
+        const usersWhere: any = {};
+        
+        // Add search filter if provided - search by name or email
+        if (search && search.trim()) {
+            usersWhere[Op.or] = [
+                { full_name: { [Op.iLike]: `%${search}%` } },
+                { email: { [Op.iLike]: `%${search}%` } },
+            ];
+        }
+
         return await DB.Users.findAndCountAll({
+            where: usersWhere,
             include: includeOptions,
             offset: (page - 1) * limit,
             limit,
@@ -149,7 +163,8 @@ const repo = {
         page,
         limit,
         roleWhere,
-    }: PaginationQuery & { roleWhere?: any }) => {
+        search,
+    }: PaginationQuery & { roleWhere?: any; search?: string }) => {
         const includeOptions: any = {
             model: DB.Roles,
             as: 'role',
@@ -162,8 +177,17 @@ const repo = {
                 [Op.eq]: 'admin',
             },
         };
+        // Build where condition for Users table (search by name or email)
+        const usersWhere: any = {};
+        if (search && search.trim()) {
+            usersWhere[Op.or] = [
+                { full_name: { [Op.iLike]: `%${search}%` } },
+                { email: { [Op.iLike]: `%${search}%` } },
+            ];
+        }
 
         return await DB.Users.findAndCountAll({
+            where: usersWhere,
             include: [includeOptions],
             offset: (page - 1) * limit,
             limit,
