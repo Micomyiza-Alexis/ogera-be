@@ -163,7 +163,8 @@ const repo = {
         page,
         limit,
         roleWhere,
-    }: PaginationQuery & { roleWhere?: any }) => {
+        search,
+    }: PaginationQuery & { roleWhere?: any; search?: string }) => {
         const includeOptions: any = {
             model: DB.Roles,
             as: 'role',
@@ -176,8 +177,17 @@ const repo = {
                 [Op.eq]: 'admin',
             },
         };
+        // Build where condition for Users table (search by name or email)
+        const usersWhere: any = {};
+        if (search && search.trim()) {
+            usersWhere[Op.or] = [
+                { full_name: { [Op.iLike]: `%${search}%` } },
+                { email: { [Op.iLike]: `%${search}%` } },
+            ];
+        }
 
         return await DB.Users.findAndCountAll({
+            where: usersWhere,
             include: [includeOptions],
             offset: (page - 1) * limit,
             limit,

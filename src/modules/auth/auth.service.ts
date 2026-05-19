@@ -1458,10 +1458,9 @@ export const createSubAdmin = async (
 export const getAllSubAdminsService = async ({
     page,
     limit,
-}: PaginationQuery) => {
-    const { rows, count } = await repo.findAllSubAdmins({ page, limit });
-    if (!rows.length)
-        throw new CustomError('No subadmins found', StatusCodes.NOT_FOUND);
+    search,
+}: PaginationQuery & { search?: string }) => {
+    const { rows, count } = await repo.findAllSubAdmins({ page, limit, search });
 
     return {
         data: rows,
