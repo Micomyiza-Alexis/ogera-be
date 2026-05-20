@@ -18,6 +18,9 @@ import { startEmailDigestSchedulers } from './schedulers/emailDigests.scheduler'
 
 const appServer = express();
 const httpServer = createServer(appServer);
+
+// Render/Vercel sit behind a reverse proxy; required for secure cookies & HTTPS detection.
+appServer.set('trust proxy', 1);
 // const port = PORT;
 const port = process.env.PORT || 5000;
 // const corsOrigin = FRONTEND_URL || 'http://localhost:5173';
@@ -28,7 +31,8 @@ const allowedOrigins = [
   'https://ogera-frontend.vercel.app',
   'https://app.ogera.sybellasystems.co.rw',
   'https://ogera.sybellasystems.co.rw',
-];
+  ...(FRONTEND_URL ? [FRONTEND_URL.replace(/\/$/, '')] : []),
+].filter((origin, index, list) => list.indexOf(origin) === index);
 
 // In development we allow all origins; in production we reflect the configured frontend URL.
 // const corsOptions: cors.CorsOptions = {
@@ -43,6 +47,12 @@ const allowedOrigins = [
 const corsOptions: cors.CorsOptions = {
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else if (
+      NODE_ENV !== 'production' &&
+      /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)
+    ) {
+      // Allow Vercel preview deployments in non-production API environments.
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));

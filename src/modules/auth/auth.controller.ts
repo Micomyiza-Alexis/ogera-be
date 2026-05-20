@@ -1,6 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { ResponseFormat } from '@/exception/responseFormat';
+import {
+    clearAuthCookies,
+    setIsLoggedInCookie,
+    setRefreshTokenCookie,
+} from '@/utils/authCookies';
 import { Messages } from '@/utils/messages';
 import {
     registerUser,
@@ -76,18 +81,8 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         // Set the refresh token cookie so the browser can silently refresh —
         // mirrors the login flow, enabling auto-login straight after signup.
         if (result.refreshToken) {
-            res.cookie('refreshToken', result.refreshToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                maxAge: 7 * 24 * 60 * 60 * 1000,
-            });
-            res.cookie('isLoggedIn', 'true', {
-                httpOnly: false,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                maxAge: 7 * 24 * 60 * 60 * 1000,
-            });
+            setRefreshTokenCookie(res, result.refreshToken);
+            setIsLoggedInCookie(res);
         }
 
         response.response(
@@ -155,20 +150,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
         const { user, accessToken, refreshToken } = result;
 
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            // secure: false,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
-        // 2. The Hint Cookie (NOT httpOnly - so JS can read it) ⭐
-        res.cookie('isLoggedIn', 'true', {
-            httpOnly: false, // Accessible by frontend
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        setRefreshTokenCookie(res, refreshToken);
+        setIsLoggedInCookie(res);
 
         response.response(
             res,
@@ -457,18 +440,8 @@ export const verifyLogin2FA = async (req: Request, res: Response): Promise<void>
             req,
         );
 
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
-        res.cookie('isLoggedIn', 'true', {
-            httpOnly: false,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        setRefreshTokenCookie(res, refreshToken);
+        setIsLoggedInCookie(res);
 
         response.response(
             res,
@@ -504,13 +477,7 @@ export const refreshAccessToken = async (
             refreshToken,
         );
 
-        res.cookie('refreshToken', newRefreshToken, {
-            httpOnly: true,
-            // secure: false,
-            secure: process.env.NODE_ENV === 'production', // Only true in production
-            sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+        setRefreshTokenCookie(res, newRefreshToken);
 
         response.response(
             res,
@@ -534,8 +501,7 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
     try {
         await logoutUser(req);
 
-        res.clearCookie('refreshToken');
-        res.clearCookie('isLoggedIn'); // Clear the hint ⭐
+        clearAuthCookies(res);
 
         response.response(
             res,
