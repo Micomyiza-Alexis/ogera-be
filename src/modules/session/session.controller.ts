@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { SessionService } from './session.service';
 import { StatusCodes } from 'http-status-codes';
+import { clearAuthCookies } from '@/utils/authCookies';
 
 const sessionService = new SessionService();
 
@@ -155,8 +156,7 @@ export const revokeAllSessions = async (req: Request, res: Response) => {
 
     await sessionService.revokeAllSessions(userId);
 
-    res.clearCookie('refreshToken');
-    res.clearCookie('isLoggedIn');
+    clearAuthCookies(res);
 
     res.status(StatusCodes.OK).json({
       success: true,
