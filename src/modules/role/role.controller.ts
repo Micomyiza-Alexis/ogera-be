@@ -20,7 +20,8 @@ export class RoleController {
     // Get all roles
     async getAllRoles(req: Request, res: Response) {
         try {
-            const roles = await roleService.getAllRoles();
+            const search = (req.query.search as string) || undefined;
+            const roles = await roleService.getAllRoles(search);
             res.status(200).json(roles);
         } catch (err: any) {
             res.status(400).json({ error: err.message });

@@ -50,8 +50,8 @@ export class PermissionService {
         });
     }
 
-    async getAllPermissions() {
-        const permissions = await this.repo.getAllPermissions();
+    async getAllPermissions(search?: string) {
+        const permissions = await this.repo.getAllPermissions({ search });
         return permissions.map(permission => ({
             ...permission.toJSON(),
             permission:

@@ -4,7 +4,7 @@ import { CustomError } from '@/utils/custom-error';
 import logger from '@/utils/logger';
 import { calculateTrustScoreService } from '@/modules/trustScore/trustScore.service';
 import repo from './profile.repo';
-import { saveFile } from '@/utils/storage.service';
+import { getFileUrl, saveFile } from '@/utils/storage.service';
 import { DB } from '@/database';
 import {
     CreateSkillRequest,
@@ -337,18 +337,22 @@ export const getFullProfileService = async (user_id: string) => {
 // ====================== PROFILE IMAGE UPLOAD ======================
 export const uploadProfileImageService = async (user_id: string, file: Express.Multer.File) => {
     const { path: filePath, storageType } = await saveFile(file, 'profile-images');
-    let imageUrl = filePath;
+    let storedUrl = filePath;
+    let displayUrl = filePath;
     if (storageType === 'local') {
         const fileName = path.basename(filePath);
         const baseUrl = process.env.BASE_URL?.replace('/api', '') || `http://localhost:${process.env.PORT || 5000}`;
-        imageUrl = `${baseUrl}/uploads/profile-images/${fileName}`;
+        storedUrl = `${baseUrl}/uploads/profile-images/${fileName}`;
+        displayUrl = storedUrl;
+    } else {
+        displayUrl = await getFileUrl(filePath, storageType);
     }
     try {
-        await DB.Users.update({ profile_image_url: imageUrl }, { where: { user_id } });
+        await DB.Users.update({ profile_image_url: storedUrl }, { where: { user_id } });
     } catch (err: any) {
         console.warn('⚠️ Could not update profile_image_url column:', err.message);
     }
-    return { profile_image_url: imageUrl };
+    return { profile_image_url: displayUrl };
 };
 
 // ====================== PROFILE COMPLETION ======================

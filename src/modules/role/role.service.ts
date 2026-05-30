@@ -73,8 +73,8 @@ export class RoleService {
     }
 
     // Get all roles
-    async getAllRoles() {
-        const roles = await this.repo.getAllRoles();
+    async getAllRoles(search?: string) {
+        const roles = await this.repo.getAllRoles({ search });
         return roles.map(role => ({
             ...role.toJSON(),
             permission_json:
